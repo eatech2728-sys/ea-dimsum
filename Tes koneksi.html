@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tes Koneksi EA Dimsum</title>
+<style>
+  body { margin: 0; background: #FBF9F6; color: #2B1B10; font-family: system-ui, sans-serif; line-height: 1.45; }
+  header { padding: 24px 16px; color: #fff; background: linear-gradient(135deg, #4A2D17, #7A4A25 55%, #9A6431); }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; opacity: .92; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px; }
+  .kartu { background: #fff; border: 1px solid #E8DDD0; border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
+  .kartu h2 { margin: 0 0 4px; font-size: 16px; }
+  .kartu p { margin: 0; color: #6F5C4C; font-size: 14px; word-break: break-word; }
+  .ok { border-left: 6px solid #17684D; }
+  .gagal { border-left: 6px solid #A32A1F; }
+  .info { border-left: 6px solid #8A5A00; }
+  ul { margin: 8px 0 0; padding-left: 18px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tes koneksi EA Dimsum</h1>
+  <p>Halaman ini hanya untuk memastikan aplikasi tersambung ke database.</p>
+</header>
+<main id="hasil"></main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+  var hasil = document.getElementById('hasil');
+
+  function tambah(jenis, judul, detail, daftar) {
+    var kartu = document.createElement('div');
+    kartu.className = 'kartu ' + jenis;
+    var h = document.createElement('h2');
+    h.textContent = judul;
+    kartu.appendChild(h);
+    if (detail) {
+      var p = document.createElement('p');
+      p.textContent = detail;
+      kartu.appendChild(p);
+    }
+    if (daftar && daftar.length) {
+      var ul = document.createElement('ul');
+      daftar.forEach(function (teks) {
+        var li = document.createElement('li');
+        li.textContent = teks;
+        ul.appendChild(li);
+      });
+      kartu.appendChild(ul);
+    }
+    hasil.appendChild(kartu);
+  }
+
+  function rupiah(n) {
+    return 'Rp ' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+
+  async function jalan() {
+    var cfg = window.EA_CONFIG || {};
+    if (!cfg.SUPABASE_URL || cfg.SUPABASE_URL.indexOf('XXXX') !== -1 ||
+        !cfg.SUPABASE_ANON_KEY || cfg.SUPABASE_ANON_KEY.indexOf('ISI_') === 0) {
+      tambah('gagal', 'Pengaturan belum diisi',
+        'Buka file config.js di repo GitHub Anda, isi SUPABASE_URL dan SUPABASE_ANON_KEY, lalu simpan (commit) dan muat ulang halaman ini.');
+      return;
+    }
+    if (!window.supabase) {
+      tambah('gagal', 'Library Supabase gagal dimuat', 'Periksa sambungan internet, lalu muat ulang halaman.');
+      return;
+    }
+
+    var db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+
+    // Tes 1: membaca menu yang boleh dilihat pelanggan
+    var menu = await db.from('public_menu').select('*');
+    if (menu.error) {
+      tambah('gagal', 'Gagal membaca menu', menu.error.message +
+        ' (Pastikan keempat file SQL sudah dijalankan berurutan dan URL/kunci di config.js benar.)');
+    } else if (!menu.data.length) {
+      tambah('info', 'Tersambung, tetapi menu kosong',
+        'Koneksi berhasil. Jalankan ea-dimsum-seed-laporan.sql agar menu terisi.');
+    } else {
+      tambah('ok', 'Tersambung. Menu terbaca (' + menu.data.length + ' item)', '',
+        menu.data.map(function (m) {
+          return m.name + ' - ' + rupiah(m.price) + (m.is_available ? '' : ' (habis)');
+        }));
+    }
+
+    // Tes 2: data pesanan HARUS terkunci untuk pengunjung biasa
+    var pesanan = await db.from('orders').select('id').limit(1);
+    if (pesanan.error) {
+      tambah('ok', 'Aman: data pesanan terkunci untuk pengunjung',
+        'Pengunjung tidak bisa membaca tabel pesanan secara langsung. Ini yang diharapkan.');
+    } else if (pesanan.data && pesanan.data.length) {
+      tambah('gagal', 'BAHAYA: data pesanan bisa dibaca pengunjung',
+        'Jalankan ea-dimsum-keamanan.sql sekarang juga, jangan buka aplikasi ke pelanggan dulu.');
+    } else {
+      tambah('info', 'Tidak bisa dipastikan',
+        'Tabel pesanan terbaca kosong. Pastikan ea-dimsum-keamanan.sql sudah dijalankan.');
+    }
+  }
+
+  jalan();
+</script>
+</body>
+</html>
