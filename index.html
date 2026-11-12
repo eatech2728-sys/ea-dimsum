@@ -16,11 +16,16 @@
   body { margin: 0; background: var(--bg); color: var(--teks); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; line-height: 1.4; }
   button, input { font-family: inherit; font-size: inherit; }
   button { cursor: pointer; }
+  body { background: radial-gradient(1200px 500px at 50% -120px, #F3E4D0, transparent 70%), var(--bg); }
   .wrap { max-width: 520px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
-  .hero { background: var(--grad); color: #fff; padding: 28px 20px 20px; border-radius: 0 0 20px 20px; margin-bottom: 12px; }
-  .hero .brand { font-size: 12px; font-weight: 700; letter-spacing: .08em; }
-  .hero h1 { margin: 2px 0; font-size: 24px; line-height: 1.2; font-weight: 800; }
+  .wrap.wide { max-width: 1180px; }
+  .hero { background: var(--grad); color: #fff; padding: 30px 20px 26px; border-radius: 0 0 24px 24px; margin-bottom: 12px; position: relative; overflow: hidden; box-shadow: 0 6px 18px rgba(74,45,23,.18); }
+  .hero::after { content: '🥟'; position: absolute; right: 14px; bottom: -14px; font-size: 92px; opacity: .16; transform: rotate(-12deg); pointer-events: none; }
+  .hero .brand { font-size: 12px; font-weight: 700; letter-spacing: .14em; opacity: .9; }
+  .hero h1 { margin: 4px 0; font-size: 26px; line-height: 1.2; font-weight: 800; }
   .hero p { margin: 0; opacity: .92; }
+  .shop { display: block; }
+  .side { display: none; }
   .pad { padding: 4px 20px 12px; }
   .redup { color: var(--redup); }
   .center { text-align: center; }
@@ -29,16 +34,18 @@
   .chip { flex: none; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid #DCCDBB; background: #fff; color: var(--teks); font-weight: 600; }
   .chip.on { background: var(--kayu); border-color: var(--kayu); color: #fff; }
   .list { flex: 1; padding: 0 20px 12px; display: flex; flex-direction: column; gap: 12px; }
-  .card { background: #fff; border: 1px solid var(--garis); border-radius: 14px; padding: 12px; }
+  .card { background: #fff; border: 1px solid var(--garis); border-radius: 16px; padding: 12px; box-shadow: 0 1px 2px rgba(74,45,23,.05); }
   .item { display: flex; gap: 12px; align-items: center; }
   .item.off { opacity: .55; }
-  .foto { width: 64px; height: 64px; flex: none; border-radius: 10px; background: var(--krem); color: var(--redup); font-size: 11px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .foto { width: 76px; height: 76px; flex: none; border-radius: 12px; background: linear-gradient(135deg, #F6EBDC, #E8D3B8); font-size: 38px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+  .foto .tag { position: absolute; left: 6px; top: 6px; background: var(--merah); color: #fff; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; }
   .foto img { width: 100%; height: 100%; object-fit: cover; }
   .info { flex: 1; min-width: 0; }
   .nama { font-weight: 700; }
   .ket { color: var(--redup); font-size: 12px; }
-  .harga { font-weight: 700; margin-top: 4px; }
+  .harga { font-weight: 800; margin-top: 4px; color: var(--kayu); font-size: 15px; }
   .ctl { width: 116px; flex: none; display: flex; justify-content: flex-end; }
+  .item { transition: box-shadow .15s, transform .15s; }
   .btn-add { min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1.5px solid var(--kayu); background: #fff; color: var(--kayu); font-weight: 700; }
   .qty { display: flex; align-items: center; gap: 4px; }
   .qbtn { width: 44px; height: 44px; border-radius: 12px; border: 1px solid #DCCDBB; background: #fff; font-size: 20px; color: var(--teks); }
@@ -82,6 +89,30 @@
   .struk .judul b { font-size: 18px; font-weight: 800; }
   .dash { border-top: 1px dashed #DCCDBB; padding-top: 12px; }
   .acts { display: flex; flex-direction: column; gap: 8px; }
+  .sidebox h2 { margin: 0 0 10px; font-size: 17px; font-weight: 800; }
+  .sidebox .lines { margin-bottom: 12px; }
+  @media (min-width: 700px) {
+    body { font-size: 15px; }
+    .hero { padding: 44px 40px 36px; border-radius: 0 0 32px 32px; }
+    .hero h1 { font-size: 36px; }
+    .hero p { font-size: 16px; }
+    .hero::after { font-size: 170px; right: 40px; bottom: -34px; }
+    .chips { padding: 4px 0 16px; }
+    .pad { padding-left: 40px; padding-right: 40px; }
+    .wrap.wide .pad { padding-left: 24px; padding-right: 24px; }
+    .shop { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; padding: 0 24px 40px; align-items: start; }
+    .list { padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; align-content: start; }
+    .item { flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden; }
+    .item:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(74,45,23,.14); }
+    .item .foto { width: 100%; height: auto; aspect-ratio: 4 / 3; border-radius: 0; font-size: 64px; }
+    .item .info { padding: 12px 14px 4px; }
+    .item .nama { font-size: 16px; }
+    .item .ctl { width: auto; padding: 8px 14px 14px; justify-content: space-between; align-items: center; }
+    .side { display: block; position: sticky; top: 16px; }
+    .wrap.wide .bar { display: none; }
+    .wrap:not(.wide) { max-width: 680px; }
+    .top h1 { font-size: 22px; }
+  }
   @media print {
     .noprint { display: none !important; }
     body { background: #fff; }
@@ -176,6 +207,15 @@
       if (!S.cat || cats.indexOf(S.cat) < 0) S.cat = cats[0] || null;
       S.menu.forEach(function (m) { if (!m.is_available) delete S.qty[m.id]; });
     }
+    if (!r.error) {
+      var fr;
+      try { fr = await db.from('public_menu_foto').select('*'); } catch (e) { fr = { error: e }; }
+      if (fr && !fr.error && fr.data) {
+        var map = {};
+        fr.data.forEach(function (x) { map[x.id] = x.image_url; });
+        S.menu.forEach(function (m) { if (!m.image_url && map[m.id]) m.image_url = map[m.id]; });
+      }
+    }
     S.loading = false; render();
   }
 
@@ -256,6 +296,10 @@
   // ---------- tampilan: menu ----------
   function chip(label, on, fn) { return h('button', { class: 'chip' + (on ? ' on' : ''), onClick: fn }, label); }
 
+  function icon(m) {
+    var t = (m.name + ' ' + (m.category || '')).toLowerCase();
+    return /bakso|tuna|bakar/.test(t) ? '🍢' : /minum|es |teh|kopi|jus/.test(t) ? '🥤' : '🥟';
+  }
   function menuCard(m) {
     var q = S.qty[m.id] || 0, ctrl;
     if (!m.is_available) ctrl = h('span', { class: 'habis' }, 'Habis');
@@ -265,7 +309,9 @@
       h('span', { class: 'qnum' }, q),
       h('button', { class: 'qbtn plus', 'aria-label': 'Tambah ' + m.name, onClick: function () { setQty(m.id, q + 1); } }, '+'));
     return h('div', { class: 'card item' + (m.is_available ? '' : ' off') },
-      h('div', { class: 'foto', 'aria-hidden': 'true' }, m.image_url ? h('img', { src: m.image_url, alt: '' }) : 'Foto'),
+      h('div', { class: 'foto', 'aria-hidden': 'true' },
+        m.image_url ? h('img', { src: m.image_url, alt: '', loading: 'lazy' }) : icon(m),
+        m.is_available ? null : h('span', { class: 'tag' }, 'Habis')),
       h('div', { class: 'info' },
         h('div', { class: 'nama' }, m.name),
         h('div', { class: 'ket' }, m.description || ''),
@@ -273,6 +319,17 @@
       h('div', { class: 'ctl' }, ctrl));
   }
 
+  function sideBox(n) {
+    var lines = cartItems().map(function (m) {
+      return h('div', { class: 'row' }, h('span', null, S.qty[m.id] + ' x ' + m.name), h('span', { class: 'nama' }, rp(S.qty[m.id] * m.price)));
+    });
+    return h('aside', { class: 'side' }, h('div', { class: 'card sidebox' },
+      h('h2', null, 'Pesanan Anda'),
+      n > 0 ? h('div', { class: 'lines' }, lines) : h('p', { class: 'redup' }, 'Belum ada menu dipilih. Tekan Tambah pada menu yang Anda mau.'),
+      n > 0 ? h('div', { class: 'row total', style: 'margin-bottom:12px' }, h('span', null, 'Subtotal'), h('span', null, rp(cartSub()))) : null,
+      n > 0 ? h('button', { class: 'btn', onClick: function () { go('cart'); } },
+        h('span', null, 'Lihat keranjang · ' + n + ' item'), h('span', null, rp(cartSub()))) : null));
+  }
   function viewMenu() {
     var cats = categories();
     var items = S.menu.filter(function (m) { return m.category === S.cat; });
@@ -282,10 +339,13 @@
     else if (S.loadErr) body = h('div', { class: 'pad' }, h('p', { class: 'err' }, S.loadErr), h('button', { class: 'btn-ghost', onClick: loadMenu }, 'Coba lagi'));
     else if (!S.menu.length) body = h('p', { class: 'pad redup' }, 'Menu belum tersedia.');
     else body = [
-      h('div', { class: 'chips' }, cats.map(function (c) { return chip(c, S.cat === c, function () { S.cat = c; render(); }); })),
-      h('main', { class: 'list' }, items.map(menuCard))
+      h('div', { class: 'shop' },
+        h('div', null,
+          h('div', { class: 'chips' }, cats.map(function (c) { return chip(c, S.cat === c, function () { S.cat = c; render(); }); })),
+          h('main', { class: 'list' }, items.map(menuCard))),
+        sideBox(n))
     ];
-    return h('div', { class: 'wrap' },
+    return h('div', { class: 'wrap wide' },
       h('header', { class: 'hero' },
         h('div', { class: 'brand' }, 'EA DIMSUM'),
         h('h1', null, 'Mau pesan apa hari ini?'),
