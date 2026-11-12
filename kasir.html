@@ -332,6 +332,38 @@
     setStatus(o, 'dibatalkan');
   }
 
+  // aksi hapus (khusus admin)
+  function isAdmin() { return !!(K.profile && K.profile.role === 'admin'); }
+  function deleteOrder(o) {
+    if (!window.confirm('Hapus pesanan ' + o.queue_no + ' (' + o.customer_name + ') secara permanen?\n\nStok dikembalikan dan pesanan ini hilang dari laporan. Tidak bisa dibatalkan.')) return;
+    run(function () { return db.rpc('delete_order', { p_order: o.id }); },
+      async function () { if (!K.err) K.info = 'Pesanan ' + o.queue_no + ' dihapus.'; await loadOrders(true); });
+  }
+  function deleteMenu(m) {
+    if (!window.confirm('Hapus menu "' + m.name + '" secara permanen?\n\nPesanan lama dan laporan penjualan tetap aman. Riwayat stok menu ini ikut terhapus.')) return;
+    run(function () { return db.from('menu_items').delete().eq('id', m.id); },
+      async function () { if (!K.err) K.info = 'Menu ' + m.name + ' dihapus.'; await loadMenu(); });
+  }
+  function deleteCat(c) {
+    if (!window.confirm('Hapus kategori "' + c.name + '"?')) return;
+    run(function () { return db.from('menu_categories').delete().eq('id', c.id); },
+      async function () { if (!K.err) K.info = 'Kategori ' + c.name + ' dihapus.'; await loadMenu(); });
+  }
+  function resetData() {
+    var box = document.getElementById('rst');
+    if (!box || box.value.trim() !== 'HAPUS') return;
+    if (!window.confirm('Yakin? Semua pesanan dan riwayat penjualan akan dihapus permanen dan tidak bisa dikembalikan.')) return;
+    var n = null;
+    run(async function () {
+      var r = await db.rpc('reset_test_data', { p_confirm: 'HAPUS' });
+      if (!r.error && r.data) n = r.data.orders;
+      return r;
+    }, async function () {
+      if (!K.err) K.info = 'Selesai. ' + (n === null ? '' : n + ' pesanan dihapus. ') + 'Nomor antrean mulai dari A-001 lagi. Periksa dan atur ulang stok di tab Stok.';
+      await loadOrders(true);
+    });
+  }
+
   // aksi stok
   function qtyOf(id) { var n = parseInt(K.stockIn[id], 10); return isNaN(n) ? null : n; }
   function stockAct(s, kind) {
@@ -390,7 +422,7 @@
     var admin = K.profile.role === 'admin';
     var perlu = K.orders.filter(function (o) { return o.status === 'menunggu_persetujuan' || o.status === 'baru'; }).length;
     var tabs = [['pesanan', 'Pesanan'], ['stok', 'Stok'], ['laporan', 'Laporan']];
-    if (admin) tabs.push(['menu', 'Menu']);
+    if (admin) { tabs.push(['menu', 'Menu']); tabs.push(['pengaturan', 'Pengaturan']); }
     return h('div', null,
       h('div', { class: 'hdr' }, h('div', { class: 'in' },
         h('b', null, 'EA Dimsum · Kasir'),
@@ -403,7 +435,7 @@
         })),
         K.err ? h('div', { class: 'alert bad', role: 'alert' }, K.err) : null,
         K.info ? h('div', { class: 'alert good', role: 'status' }, K.info) : null,
-        K.tab === 'pesanan' ? viewOrders() : K.tab === 'stok' ? viewStock() : K.tab === 'laporan' ? viewReport() : viewMenu()));
+        K.tab === 'pesanan' ? viewOrders() : K.tab === 'stok' ? viewStock() : K.tab === 'laporan' ? viewReport() : K.tab === 'pengaturan' ? viewSettings() : viewMenu()));
   }
 
   // ---------- tampilan: pesanan ----------
@@ -480,7 +512,8 @@
         h('div', { class: 'row total' }, h('span', null, 'Total'), h('span', null, rp(o.total))),
         h('div', { class: 'row small' }, h('span', { class: 'redup' }, 'Pembayaran'), h('b', { style: paid ? 'color:#17684D' : 'color:#8A5A00' }, paid ? 'Lunas' : 'Belum lunas'))),
       o.status === 'ditolak' && o.reject_reason ? h('div', { class: 'small redup' }, 'Alasan: ' + o.reject_reason) : null,
-      acts);
+      acts,
+      isAdmin() ? h('div', { class: 'btns' }, h('button', { class: 'b-del', disabled: K.busy, 'aria-label': 'Hapus pesanan ' + o.queue_no, onClick: function () { deleteOrder(o); } }, 'Hapus pesanan')) : null);
   }
 
   // ---------- tampilan: stok ----------
@@ -563,6 +596,14 @@
           h('input', { type: 'text', id: 'nm-desc', value: f.desc, onInput: function (e) { f.desc = e.target.value; } })),
         h('div', { class: 'btns' }, h('button', { class: 'b-main', disabled: K.busy, onClick: addMenu }, 'Tambah menu')),
         h('div', { class: 'small redup' }, 'Menu baru stoknya 0. Isi stok di tab Stok agar bisa dipesan.')),
+      h('h2', null, 'Kategori'),
+      K.cats.length ? h('div', { class: 'card lines' }, K.cats.map(function (c) {
+        var n = K.menu.filter(function (m) { return m.category_id === c.id; }).length;
+        return h('div', { class: 'row' },
+          h('span', null, h('b', null, c.name), h('span', { class: 'redup' }, ' · ' + n + ' menu')),
+          n === 0 ? h('button', { class: 'b-del', disabled: K.busy, 'aria-label': 'Hapus kategori ' + c.name, onClick: function () { deleteCat(c); } }, 'Hapus')
+                  : h('span', { class: 'small redup' }, 'Kosongkan dulu untuk menghapus'));
+      })) : h('p', { class: 'redup' }, 'Belum ada kategori.'),
       h('h2', null, 'Daftar menu'),
       K.menu.length ? h('div', { class: 'sgrid' }, K.menu.map(function (m) {
         var e = K.menuEdit[m.id] || {};
@@ -574,8 +615,27 @@
               h('input', { type: 'number', min: '0', inputmode: 'numeric', id: 'p-' + m.id, value: e.price !== undefined ? e.price : m.price, onInput: function (ev) { (K.menuEdit[m.id] = K.menuEdit[m.id] || {}).price = ev.target.value; } })),
             h('div', null, h('label', { class: 'lbl', for: 'd-' + m.id }, 'Keterangan'),
               h('input', { type: 'text', id: 'd-' + m.id, value: e.desc !== undefined ? e.desc : (m.description || ''), onInput: function (ev) { (K.menuEdit[m.id] = K.menuEdit[m.id] || {}).desc = ev.target.value; } }))),
-          h('div', { class: 'btns' }, h('button', { class: 'b-out', disabled: K.busy, onClick: function () { saveMenu(m); } }, 'Simpan')));
+          h('div', { class: 'btns' },
+            h('button', { class: 'b-out', disabled: K.busy, onClick: function () { saveMenu(m); } }, 'Simpan'),
+            h('button', { class: 'b-del', disabled: K.busy, 'aria-label': 'Hapus menu ' + m.name, onClick: function () { deleteMenu(m); } }, 'Hapus menu')));
       })) : h('p', { class: 'redup' }, 'Memuat menu...'));
+  }
+
+  // ---------- tampilan: pengaturan (admin) ----------
+  function viewSettings() {
+    return h('div', null,
+      h('h2', { style: 'margin-top:4px' }, 'Hapus data uji coba'),
+      h('div', { class: 'card' },
+        h('p', { style: 'margin:0' }, 'Gunakan ini sekali saja, setelah selesai mencoba aplikasi dan sebelum EA Dimsum berjualan sungguhan.'),
+        h('div', { class: 'box small' },
+          h('div', null, 'Yang dihapus: semua pesanan, struk, dan riwayat penjualan. Nomor antrean mulai lagi dari A-001.'),
+          h('div', { style: 'margin-top:6px' }, 'Yang tetap ada: menu, kategori, harga, jumlah stok saat ini, dan akun staf. Periksa dan atur ulang stok di tab Stok.')),
+        h('p', { class: 'small', style: 'margin:0;color:#A32A1F;font-weight:700' }, 'Data yang dihapus tidak bisa dikembalikan.'),
+        h('div', null,
+          h('label', { class: 'lbl', for: 'rst' }, 'Ketik HAPUS untuk melanjutkan'),
+          h('input', { type: 'text', id: 'rst', autocomplete: 'off', autocapitalize: 'characters', value: '',
+            onInput: function (e) { var b = document.getElementById('btn-reset'); if (b) b.disabled = K.busy || e.target.value.trim() !== 'HAPUS'; } })),
+        h('div', { class: 'btns' }, h('button', { class: 'b-main', id: 'btn-reset', disabled: true, onClick: resetData }, 'Hapus semua data uji coba'))));
   }
 
   // ---------- mulai ----------
