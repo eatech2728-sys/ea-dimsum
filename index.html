@@ -398,6 +398,7 @@
         })),
         h('div', { class: 'dash lines' },
           h('div', { class: 'row' }, h('span', { class: 'redup' }, 'Subtotal'), h('span', null, rp(o.subtotal))),
+          Number(o.discount) > 0 ? h('div', { class: 'row' }, h('span', { class: 'redup' }, 'Diskon' + (o.discount_note ? ' (' + o.discount_note + ')' : '')), h('span', null, '- ' + rp(o.discount))) : null,
           o.order_type === 'antar' ? h('div', { class: 'row' }, h('span', { class: 'redup' }, 'Ongkir'), h('span', null, rp(o.delivery_fee))) : null,
           h('div', { class: 'row total' }, h('span', null, 'Total'), h('span', null, rp(o.total)))),
         h('div', { class: 'dash row' }, h('span', { class: 'redup' }, 'Status bayar'), h('b', null, payText(o))),
