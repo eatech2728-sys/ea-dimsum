@@ -140,7 +140,7 @@
   var K = {
     ready: false, profile: null, tab: 'pesanan', filter: 'aktif',
     orders: [], stock: [], menu: [], cats: [], rep: null,
-    fee: {}, stockIn: {}, menuEdit: {}, newMenu: { cat: '', newCat: '', name: '', price: '', desc: '' },
+    fee: {}, disc: {}, stockIn: {}, menuEdit: {}, newMenu: { cat: '', newCat: '', name: '', price: '', desc: '' },
     email: '', pass: '', loginErr: '', busy: false, err: '', info: '', dirty: false
   };
   var chan = null, pollT = null, reloadT = null, ac = null;
@@ -252,7 +252,7 @@
     var r;
     try {
       r = await db.from('orders')
-        .select('id,queue_no,customer_name,customer_phone,order_type,status,pickup_note,table_no,delivery_address,delivery_fee,reject_reason,subtotal,total,payment_status,payment_method,created_at,order_items(item_name,qty,line_total,note)')
+        .select('id,queue_no,customer_name,customer_phone,order_type,status,pickup_note,table_no,delivery_address,delivery_fee,reject_reason,subtotal,discount,discount_note,total,payment_status,payment_method,created_at,order_items(item_name,qty,line_total,note)')
         .or('order_day.eq.' + todayStr() + ',status.in.(' + ACTIVE.join(',') + ')')
         .order('created_at', { ascending: false });
     } catch (e) { r = { error: e }; }
@@ -332,6 +332,29 @@
     setStatus(o, 'dibatalkan');
   }
 
+  // aksi diskon (admin dan kasir)
+  function discState(o) {
+    return K.disc[o.id] || (K.disc[o.id] = { open: false, type: 'rupiah', value: '', note: '' });
+  }
+  function openDisc(o) {
+    var d = discState(o);
+    d.open = true;
+    if (Number(o.discount) > 0) d.note = o.discount_note || '';
+    render();
+  }
+  function applyDisc(o) {
+    var d = discState(o), v = parseInt(d.value, 10);
+    if (isNaN(v) || v < 1) { K.err = 'Isi jumlah diskon dengan angka lebih dari 0.'; return render(); }
+    if (d.type === 'persen' && v > 100) { K.err = 'Persen diskon maksimal 100.'; return render(); }
+    if (!d.note.trim()) { K.err = 'Alasan diskon wajib diisi.'; return render(); }
+    run(function () { return db.rpc('apply_discount', { p_order: o.id, p_type: d.type, p_value: v, p_note: d.note.trim() }); },
+      async function () { if (!K.err) { delete K.disc[o.id]; K.info = 'Diskon pesanan ' + o.queue_no + ' tersimpan.'; } await loadOrders(true); });
+  }
+  function removeDisc(o) {
+    run(function () { return db.rpc('apply_discount', { p_order: o.id, p_type: 'rupiah', p_value: 0, p_note: null }); },
+      async function () { if (!K.err) { delete K.disc[o.id]; K.info = 'Diskon pesanan ' + o.queue_no + ' dihapus.'; } await loadOrders(true); });
+  }
+
   // aksi hapus (khusus admin)
   function isAdmin() { return !!(K.profile && K.profile.role === 'admin'); }
   function deleteOrder(o) {
@@ -409,7 +432,7 @@
     var r;
     try { r = await db.from('daily_sales').select('*').order('hari', { ascending: false }).limit(90); } catch (e) { r = { error: e }; }
     if (r.error) { K.err = cleanErr(r.error); return render(); }
-    var cols = ['hari', 'jumlah_pesanan', 'omzet', 'total_ongkir', 'pesanan_bungkus', 'pesanan_makan_ditempat', 'pesanan_antar'];
+    var cols = ['hari', 'jumlah_pesanan', 'omzet', 'total_ongkir', 'pesanan_bungkus', 'pesanan_makan_ditempat', 'pesanan_antar', 'total_diskon'];
     var csv = [cols.join(',')].concat((r.data || []).map(function (x) { return cols.map(function (c) { return x[c]; }).join(','); })).join('\n');
     var a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
@@ -472,6 +495,27 @@
       })),
       list.length ? h('div', { class: 'grid' }, list.map(orderCard)) : h('p', { class: 'empty' }, K.filter === 'aktif' ? 'Belum ada pesanan aktif.' : 'Tidak ada pesanan.'));
   }
+  function discountBlock(o) {
+    var d = discState(o), has = Number(o.discount) > 0;
+    if (!d.open) {
+      return h('div', { class: 'btns' },
+        h('button', { class: 'b-out', disabled: K.busy, onClick: function () { openDisc(o); } }, has ? 'Ubah diskon' : 'Beri diskon'),
+        has ? h('button', { class: 'b-del', disabled: K.busy, onClick: function () { removeDisc(o); } }, 'Hapus diskon') : null);
+    }
+    return h('div', { class: 'box' },
+      h('span', { class: 'lbl' }, 'Diskon'),
+      h('div', { class: 'btns', style: 'margin-bottom:8px' }, [['rupiah', 'Rupiah (Rp)'], ['persen', 'Persen (%)']].map(function (t) {
+        return h('button', { class: 'chip' + (d.type === t[0] ? ' on' : ''), onClick: function () { d.type = t[0]; render(); } }, t[1]);
+      })),
+      h('label', { class: 'lbl', for: 'dv-' + o.id }, d.type === 'persen' ? 'Persen (1-100)' : 'Potongan (Rp)'),
+      h('input', { type: 'number', min: '1', inputmode: 'numeric', id: 'dv-' + o.id, value: d.value, placeholder: d.type === 'persen' ? 'Contoh: 10' : 'Contoh: 5000', onInput: function (e) { d.value = e.target.value; } }),
+      h('label', { class: 'lbl', for: 'dn-' + o.id, style: 'margin-top:8px' }, 'Alasan (wajib)'),
+      h('input', { type: 'text', id: 'dn-' + o.id, maxlength: '100', value: d.note, placeholder: 'Contoh: pelanggan setia', onInput: function (e) { d.note = e.target.value; } }),
+      h('p', { class: 'small redup', style: 'margin:6px 0' }, 'Dihitung dari subtotal menu, ongkir tidak didiskon.'),
+      h('div', { class: 'btns' },
+        h('button', { class: 'b-main', disabled: K.busy, onClick: function () { applyDisc(o); } }, 'Terapkan'),
+        h('button', { class: 'b-out', disabled: K.busy, onClick: function () { d.open = false; render(); } }, 'Batal')));
+  }
   function orderCard(o) {
     var fin = o.status === 'selesai' || o.status === 'ditolak' || o.status === 'dibatalkan';
     var paid = o.payment_status === 'lunas';
@@ -499,6 +543,7 @@
       acts.push(h('div', { class: 'btns' }, row));
       if (o.status === 'siap' && !paid) acts.push(h('div', { class: 'small redup' }, 'Tandai lunas dulu sebelum menyelesaikan pesanan.'));
     }
+    if (!fin && !paid) acts.push(discountBlock(o));
     return h('div', { class: 'card' },
       h('div', { class: 'row' }, h('span', { class: 'no' }, o.queue_no), h('span', { class: 'badge ' + (BADGE[o.status] || 'b-end') }, LABEL[o.status] || o.status)),
       h('div', null, h('b', null, o.customer_name), h('span', { class: 'redup' }, ' · ' + TYPE[o.order_type] + ' · ' + jam(o.created_at))),
@@ -508,6 +553,7 @@
         return h('div', { class: 'row' }, h('span', null, it.qty + ' x ' + it.item_name + (it.note ? ' (' + it.note + ')' : '')), h('span', null, rp(it.line_total)));
       })),
       h('div', { class: 'dash lines' },
+        Number(o.discount) > 0 ? h('div', { class: 'row small' }, h('span', { class: 'redup' }, 'Diskon' + (o.discount_note ? ' (' + o.discount_note + ')' : '')), h('b', { style: 'color:#17684D' }, '- ' + rp(o.discount))) : null,
         o.order_type === 'antar' && Number(o.delivery_fee) > 0 ? h('div', { class: 'row small redup' }, h('span', null, 'Ongkir'), h('span', null, rp(o.delivery_fee))) : null,
         h('div', { class: 'row total' }, h('span', null, 'Total'), h('span', null, rp(o.total))),
         h('div', { class: 'row small' }, h('span', { class: 'redup' }, 'Pembayaran'), h('b', { style: paid ? 'color:#17684D' : 'color:#8A5A00' }, paid ? 'Lunas' : 'Belum lunas'))),
@@ -539,14 +585,15 @@
   function viewReport() {
     if (!K.rep) return h('p', { class: 'empty' }, 'Memuat laporan...');
     var R = K.rep, t = todayStr();
-    var hari = R.daily.filter(function (d) { return d.hari === t; })[0] || { jumlah_pesanan: 0, omzet: 0, total_ongkir: 0 };
+    var hari = R.daily.filter(function (d) { return d.hari === t; })[0] || { jumlah_pesanan: 0, omzet: 0, total_ongkir: 0, total_diskon: 0 };
     var maxO = R.hour.reduce(function (a, x) { return Math.max(a, Number(x.omzet) || 0); }, 0) || 1;
     return h('div', null,
       h('p', { class: 'redup small' }, 'Laporan menghitung pesanan yang sudah selesai dan lunas.'),
       h('div', { class: 'stats' },
         h('div', { class: 'card stat' }, h('div', { class: 'redup small' }, 'Pesanan hari ini'), h('div', { class: 'v' }, Number(hari.jumlah_pesanan))),
         h('div', { class: 'card stat' }, h('div', { class: 'redup small' }, 'Omzet hari ini'), h('div', { class: 'v' }, rp(hari.omzet))),
-        h('div', { class: 'card stat' }, h('div', { class: 'redup small' }, 'Ongkir hari ini'), h('div', { class: 'v' }, rp(hari.total_ongkir)))),
+        h('div', { class: 'card stat' }, h('div', { class: 'redup small' }, 'Ongkir hari ini'), h('div', { class: 'v' }, rp(hari.total_ongkir))),
+        h('div', { class: 'card stat' }, h('div', { class: 'redup small' }, 'Diskon hari ini'), h('div', { class: 'v' }, rp(hari.total_diskon)))),
       h('h2', null, 'Menu terlaris hari ini'),
       R.top.length ? h('div', { class: 'card tw' }, h('table', null,
         h('thead', null, h('tr', null, h('th', null, 'Menu'), h('th', { class: 'n' }, 'Terjual'), h('th', { class: 'n' }, 'Omzet'))),
@@ -560,17 +607,17 @@
       })) : h('p', { class: 'redup' }, 'Belum ada data.'),
       h('h2', null, '7 hari terakhir'),
       R.daily.length ? h('div', { class: 'card tw' }, h('table', null,
-        h('thead', null, h('tr', null, h('th', null, 'Hari'), h('th', { class: 'n' }, 'Pesanan'), h('th', { class: 'n' }, 'Omzet'), h('th', { class: 'n' }, 'Bungkus'), h('th', { class: 'n' }, 'Makan'), h('th', { class: 'n' }, 'Antar'))),
+        h('thead', null, h('tr', null, h('th', null, 'Hari'), h('th', { class: 'n' }, 'Pesanan'), h('th', { class: 'n' }, 'Omzet'), h('th', { class: 'n' }, 'Bungkus'), h('th', { class: 'n' }, 'Makan'), h('th', { class: 'n' }, 'Antar'), h('th', { class: 'n' }, 'Diskon'))),
         h('tbody', null, R.daily.map(function (d) {
           return h('tr', null, h('td', null, tgl(d.hari)), h('td', { class: 'n' }, Number(d.jumlah_pesanan)), h('td', { class: 'n' }, rp(d.omzet)),
-            h('td', { class: 'n' }, Number(d.pesanan_bungkus)), h('td', { class: 'n' }, Number(d.pesanan_makan_ditempat)), h('td', { class: 'n' }, Number(d.pesanan_antar)));
+            h('td', { class: 'n' }, Number(d.pesanan_bungkus)), h('td', { class: 'n' }, Number(d.pesanan_makan_ditempat)), h('td', { class: 'n' }, Number(d.pesanan_antar)), h('td', { class: 'n' }, rp(d.total_diskon)));
         })))) : h('p', { class: 'redup' }, 'Belum ada data.'),
       h('div', { class: 'btns', style: 'margin-top:10px' }, h('button', { class: 'b-out', onClick: downloadCsv }, 'Unduh CSV harian (untuk Google Sheets)')),
       h('h2', null, 'Per bulan'),
       R.month.length ? h('div', { class: 'card tw' }, h('table', null,
-        h('thead', null, h('tr', null, h('th', null, 'Bulan'), h('th', { class: 'n' }, 'Pesanan'), h('th', { class: 'n' }, 'Omzet'), h('th', { class: 'n' }, 'Ongkir'))),
+        h('thead', null, h('tr', null, h('th', null, 'Bulan'), h('th', { class: 'n' }, 'Pesanan'), h('th', { class: 'n' }, 'Omzet'), h('th', { class: 'n' }, 'Ongkir'), h('th', { class: 'n' }, 'Diskon'))),
         h('tbody', null, R.month.map(function (d) {
-          return h('tr', null, h('td', null, bulan(d.bulan)), h('td', { class: 'n' }, Number(d.jumlah_pesanan)), h('td', { class: 'n' }, rp(d.omzet)), h('td', { class: 'n' }, rp(d.total_ongkir)));
+          return h('tr', null, h('td', null, bulan(d.bulan)), h('td', { class: 'n' }, Number(d.jumlah_pesanan)), h('td', { class: 'n' }, rp(d.omzet)), h('td', { class: 'n' }, rp(d.total_ongkir)), h('td', { class: 'n' }, rp(d.total_diskon)));
         })))) : h('p', { class: 'redup' }, 'Belum ada data.'));
   }
 
