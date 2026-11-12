@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Kasir EA Dimsum</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gelap: #4A2D17; --kayu: #7A4A25; --terang: #9A6431;
+    --bg: #FBF9F6; --teks: #2B1B10; --garis: #E8DDD0; --redup: #6F5C4C;
+    --krem: #F1E6D8; --hijau: #17684D; --merah: #A32A1F;
+    --grad: repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0, rgba(255,255,255,.05) 2px, transparent 2px, transparent 9px), linear-gradient(135deg, #4A2D17, #7A4A25 55%, #9A6431);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--teks); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; line-height: 1.4; }
+  button, input, select { font-family: inherit; font-size: inherit; }
+  button { cursor: pointer; }
+  button:disabled { opacity: .55; cursor: default; }
+  .page { max-width: 1040px; margin: 0 auto; padding: 0 16px 40px; }
+  .hdr { background: var(--grad); color: #fff; }
+  .hdr .in { max-width: 1040px; margin: 0 auto; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .hdr b { font-size: 18px; font-weight: 800; }
+  .hdr .who { display: flex; align-items: center; gap: 10px; }
+  .hdr .out { min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1.5px solid rgba(255,255,255,.7); background: transparent; color: #fff; font-weight: 700; }
+  .tabs { display: flex; gap: 8px; padding: 14px 0 8px; overflow-x: auto; }
+  .tab { flex: none; min-height: 44px; padding: 0 18px; border-radius: 22px; border: 1px solid #DCCDBB; background: #fff; color: var(--teks); font-weight: 700; display: inline-flex; align-items: center; gap: 8px; }
+  .tab.on { background: var(--kayu); border-color: var(--kayu); color: #fff; }
+  .cnt { background: #FFE3A3; color: #5C3A00; border-radius: 10px; padding: 0 8px; font-size: 12px; font-weight: 800; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 0 12px; }
+  .chip { min-height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid #DCCDBB; background: #fff; color: var(--teks); font-weight: 600; }
+  .chip.on { background: var(--teks); border-color: var(--teks); color: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+  .card { background: #fff; border: 1px solid var(--garis); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .no { font-size: 18px; font-weight: 800; }
+  .redup { color: var(--redup); }
+  .small { font-size: 12px; }
+  .badge { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 12px; white-space: nowrap; }
+  .b-wait { background: #FFE3A3; color: #5C3A00; }
+  .b-new { background: #DCE9FA; color: #103E78; }
+  .b-proc { background: #EBD9C4; color: #4A2D17; }
+  .b-ok { background: #D5EDE3; color: #0E4F39; }
+  .b-end { background: #E6E1DA; color: #3F3832; }
+  .b-bad { background: #F8DAD6; color: #7E1A12; }
+  .box { background: var(--krem); border-radius: 12px; padding: 10px 12px; }
+  .lines { display: flex; flex-direction: column; gap: 4px; }
+  .dash { border-top: 1px dashed #DCCDBB; padding-top: 10px; }
+  .total { font-weight: 800; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .b-main { min-height: 44px; padding: 0 16px; border: 0; border-radius: 12px; background: var(--grad); color: #fff; font-weight: 700; }
+  .b-out { min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1.5px solid var(--kayu); background: #fff; color: var(--kayu); font-weight: 700; }
+  .b-del { min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: var(--merah); font-weight: 700; }
+  input[type=text], input[type=number], input[type=email], input[type=password], select { width: 100%; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid #DCCDBB; background: #fff; color: var(--teks); font-size: 15px; }
+  label.lbl, .lbl { display: block; font-weight: 700; margin-bottom: 6px; }
+  .alert { border-radius: 12px; padding: 10px 14px; font-weight: 600; margin: 8px 0; }
+  .alert.bad { background: #F8DAD6; color: #7E1A12; }
+  .alert.good { background: #D5EDE3; color: #0E4F39; }
+  .empty { text-align: center; padding: 40px 0; color: var(--redup); }
+  .login { max-width: 380px; margin: 48px auto; padding: 0 16px; }
+  .login h1 { margin: 0 0 4px; font-size: 22px; font-weight: 800; }
+  .login .card { gap: 14px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .stat .v { font-size: 22px; font-weight: 800; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--garis); }
+  th { font-size: 12px; color: var(--redup); font-weight: 700; }
+  td.n, th.n { text-align: right; }
+  .tw { overflow-x: auto; }
+  .bar { height: 10px; border-radius: 5px; background: var(--kayu); min-width: 2px; }
+  .hrow { display: grid; grid-template-columns: 54px 1fr 110px; gap: 10px; align-items: center; padding: 4px 0; }
+  .sgrid { display: grid; gap: 12px; }
+  .sctl { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .sctl input { width: 110px; }
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  h2 { font-size: 16px; margin: 18px 0 8px; font-weight: 800; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<noscript><p style="padding:20px">Halaman ini membutuhkan JavaScript.</p></noscript>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+(function () {
+  'use strict';
+  var cfg = window.EA_CONFIG || {};
+  var root = document.getElementById('app');
+
+  // ---------- pembantu ----------
+  function h(tag, attrs) {
+    var e = document.createElement(tag);
+    if (attrs) {
+      Object.keys(attrs).forEach(function (k) {
+        var v = attrs[k];
+        if (v === null || v === undefined || v === false) return;
+        if (k === 'class') e.className = v;
+        else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2).toLowerCase(), v);
+        else if (k === 'value') e.value = v;
+        else e.setAttribute(k, v === true ? '' : v);
+      });
+    }
+    (function add(list) {
+      list.forEach(function (c) {
+        if (c === null || c === undefined || c === false) return;
+        if (Array.isArray(c)) return add(c);
+        e.appendChild(c.nodeType ? c : document.createTextNode(String(c)));
+      });
+    })(Array.prototype.slice.call(arguments, 2));
+    return e;
+  }
+  function rp(n) { return 'Rp ' + String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+  function todayStr() { return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Makassar' }); }
+  function jam(iso) { return new Date(iso).toLocaleTimeString('id-ID', { timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit' }); }
+  function tgl(s) { return new Date(s + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' }); }
+  function bulan(s) { return new Date(s + 'T00:00:00').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }); }
+  function cleanErr(e) {
+    var m = (e && e.message) || '';
+    if (/jwt|expired|not authenticated/i.test(m)) return 'Sesi habis. Silakan keluar lalu masuk lagi.';
+    return m || 'Terjadi kesalahan. Coba lagi.';
+  }
+
+  var okCfg = cfg.SUPABASE_URL && cfg.SUPABASE_URL.indexOf('XXXX') === -1 &&
+              cfg.SUPABASE_ANON_KEY && cfg.SUPABASE_ANON_KEY.indexOf('ISI_') !== 0;
+  if (!okCfg || !window.supabase) {
+    root.appendChild(h('p', { class: 'alert bad' }, !okCfg ? 'Aplikasi belum dikonfigurasi. Isi config.js terlebih dahulu.' : 'Library gagal dimuat. Periksa sambungan internet lalu muat ulang.'));
+    return;
+  }
+  var db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+
+  // ---------- data tetap ----------
+  var ACTIVE = ['menunggu_persetujuan', 'menunggu_pembayaran', 'baru', 'diproses', 'siap'];
+  var LABEL = { menunggu_persetujuan: 'Menunggu persetujuan', menunggu_pembayaran: 'Menunggu pembayaran', baru: 'Baru', diproses: 'Diproses', siap: 'Siap', selesai: 'Selesai', ditolak: 'Ditolak', dibatalkan: 'Dibatalkan' };
+  var BADGE = { menunggu_persetujuan: 'b-wait', menunggu_pembayaran: 'b-wait', baru: 'b-new', diproses: 'b-proc', siap: 'b-ok', selesai: 'b-end', ditolak: 'b-bad', dibatalkan: 'b-bad' };
+  var TYPE = { bungkus: 'Bungkus', makan: 'Makan di tempat', antar: 'Antar' };
+  var NEXT = { baru: ['diproses', 'Mulai proses'], diproses: ['siap', 'Tandai siap'], siap: ['selesai', 'Selesaikan pesanan'] };
+
+  var K = {
+    ready: false, profile: null, tab: 'pesanan', filter: 'aktif',
+    orders: [], stock: [], menu: [], cats: [], rep: null,
+    fee: {}, stockIn: {}, menuEdit: {}, newMenu: { cat: '', newCat: '', name: '', price: '', desc: '' },
+    email: '', pass: '', loginErr: '', busy: false, err: '', info: '', dirty: false
+  };
+  var chan = null, pollT = null, reloadT = null, ac = null;
+
+  // ---------- bunyi pesanan baru ----------
+  function unlockAudio() {
+    try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) {}
+  }
+  function beep() {
+    try {
+      if (!ac) return;
+      [0, 0.3].forEach(function (d) {
+        var o = ac.createOscillator(), g = ac.createGain();
+        o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.15;
+        o.connect(g); g.connect(ac.destination);
+        o.start(ac.currentTime + d); o.stop(ac.currentTime + d + 0.2);
+      });
+    } catch (e) {}
+  }
+
+  // ---------- render ----------
+  function typing() {
+    var a = document.activeElement;
+    return !!(a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  }
+  function render() {
+    var y = window.scrollY;
+    while (root.firstChild) root.removeChild(root.firstChild);
+    root.appendChild(!K.ready ? h('p', { class: 'empty' }, 'Memuat...') : !K.profile ? viewLogin() : viewApp());
+    window.scrollTo(0, y);
+    var perlu = K.orders.filter(function (o) { return o.status === 'menunggu_persetujuan' || o.status === 'baru'; }).length;
+    document.title = (K.profile && perlu ? '(' + perlu + ') ' : '') + 'Kasir EA Dimsum';
+  }
+  function safeRender() { if (typing()) K.dirty = true; else render(); }
+  root.addEventListener('focusout', function () {
+    setTimeout(function () { if (K.dirty && !typing()) { K.dirty = false; render(); } }, 60);
+  });
+
+  // ---------- login ----------
+  function viewLogin() {
+    return h('div', { class: 'login' },
+      h('h1', null, 'Kasir EA Dimsum'),
+      h('p', { class: 'redup' }, 'Masuk dengan akun staf.'),
+      h('form', { class: 'card', onSubmit: function (e) { e.preventDefault(); login(); } },
+        K.loginErr ? h('div', { class: 'alert bad', role: 'alert' }, K.loginErr) : null,
+        h('div', null, h('label', { class: 'lbl', for: 'em' }, 'Email'),
+          h('input', { type: 'email', id: 'em', value: K.email, autocomplete: 'username', onInput: function (e) { K.email = e.target.value; } })),
+        h('div', null, h('label', { class: 'lbl', for: 'pw' }, 'Password'),
+          h('input', { type: 'password', id: 'pw', value: K.pass, autocomplete: 'current-password', onInput: function (e) { K.pass = e.target.value; } })),
+        h('button', { class: 'b-main', type: 'submit', disabled: K.busy }, K.busy ? 'Masuk...' : 'Masuk')));
+  }
+  async function login() {
+    if (K.busy) return;
+    K.loginErr = ''; K.busy = true; render();
+    unlockAudio();
+    var r;
+    try { r = await db.auth.signInWithPassword({ email: K.email.trim(), password: K.pass }); } catch (e) { r = { error: e }; }
+    if (r.error || !r.data || !r.data.user) {
+      K.busy = false; K.loginErr = 'Email atau password salah.'; return render();
+    }
+    K.pass = '';
+    await afterLogin(r.data.user);
+    K.busy = false; render();
+  }
+  async function afterLogin(user) {
+    var p;
+    try { p = await db.from('staff_profiles').select('full_name,role,is_active').eq('id', user.id).maybeSingle(); } catch (e) { p = { error: e }; }
+    if (p.error || !p.data || p.data.is_active === false) {
+      K.loginErr = 'Akun ini belum terdaftar sebagai staf EA Dimsum.';
+      K.profile = null; K.ready = true;
+      try { await db.auth.signOut(); } catch (e) {}
+      return render();
+    }
+    K.profile = p.data; K.ready = true; K.loginErr = '';
+    await loadOrders(true);
+    render();
+    startLive();
+  }
+  async function logout() {
+    teardown();
+    try { await db.auth.signOut(); } catch (e) {}
+    K.profile = null; K.orders = []; render();
+  }
+
+  // ---------- realtime ----------
+  function reloadSoon() {
+    clearTimeout(reloadT);
+    reloadT = setTimeout(function () {
+      loadOrders(true);
+      if (K.tab === 'stok') loadStock();
+      if (K.tab === 'laporan') loadReport();
+    }, 300);
+  }
+  function startLive() {
+    teardown();
+    chan = db.channel('orders-live').on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, function (p) {
+      if (p && p.eventType === 'INSERT') beep();
+      reloadSoon();
+    }).subscribe();
+    pollT = setInterval(function () { if (!document.hidden) loadOrders(true); }, 20000);
+  }
+  function teardown() {
+    if (chan) { try { db.removeChannel(chan); } catch (e) {} chan = null; }
+    if (pollT) { clearInterval(pollT); pollT = null; }
+  }
+
+  // ---------- muat data ----------
+  async function loadOrders(quiet) {
+    var r;
+    try {
+      r = await db.from('orders')
+        .select('id,queue_no,customer_name,customer_phone,order_type,status,pickup_note,table_no,delivery_address,delivery_fee,reject_reason,subtotal,total,payment_status,payment_method,created_at,order_items(item_name,qty,line_total,note)')
+        .or('order_day.eq.' + todayStr() + ',status.in.(' + ACTIVE.join(',') + ')')
+        .order('created_at', { ascending: false });
+    } catch (e) { r = { error: e }; }
+    if (r.error) { K.err = cleanErr(r.error); K.errLoad = true; }
+    else { K.orders = r.data || []; if (K.errLoad) { K.err = ''; K.errLoad = false; } }
+    if (quiet) safeRender(); else render();
+  }
+  async function loadStock() {
+    var r;
+    try { r = await db.from('stock_status').select('*'); } catch (e) { r = { error: e }; }
+    if (r.error) K.err = cleanErr(r.error); else K.stock = r.data || [];
+    safeRender();
+  }
+  async function loadMenu() {
+    var a, b;
+    try {
+      a = await db.from('menu_items').select('id,category_id,name,description,price,is_available,stock_qty,menu_categories(name)');
+      b = await db.from('menu_categories').select('id,name,sort_order').order('sort_order');
+    } catch (e) { a = { error: e }; b = {}; }
+    if (a.error || b.error) K.err = cleanErr(a.error || b.error);
+    else { K.menu = a.data || []; K.cats = b.data || []; }
+    safeRender();
+  }
+  async function loadReport() {
+    var t = todayStr(), rs;
+    try {
+      rs = await Promise.all([
+        db.from('daily_sales').select('*').order('hari', { ascending: false }).limit(7),
+        db.from('top_items_daily').select('*').eq('hari', t),
+        db.from('sales_by_hour').select('*').eq('hari', t).order('jam'),
+        db.from('monthly_sales').select('*').order('bulan', { ascending: false }).limit(6)
+      ]);
+    } catch (e) { K.err = cleanErr(e); return safeRender(); }
+    var bad = rs.filter(function (x) { return x.error; })[0];
+    if (bad) K.err = cleanErr(bad.error);
+    else K.rep = { daily: rs[0].data || [], top: rs[1].data || [], hour: rs[2].data || [], month: rs[3].data || [] };
+    safeRender();
+  }
+
+  // ---------- aksi (satu pintu) ----------
+  async function run(fn, after) {
+    if (K.busy) return;
+    K.busy = true; K.err = ''; K.info = ''; render();
+    try { var r = await fn(); if (r && r.error) throw r.error; }
+    catch (e) { K.err = cleanErr(e); }
+    K.busy = false;
+    try { await after(); } catch (e) {}
+    render();
+  }
+  function setTab(t) {
+    K.tab = t; K.err = ''; K.info = ''; render();
+    if (t === 'pesanan') loadOrders(true);
+    if (t === 'stok') loadStock();
+    if (t === 'menu') loadMenu();
+    if (t === 'laporan') loadReport();
+  }
+
+  // aksi pesanan
+  function approve(o) {
+    var fee = parseInt(K.fee[o.id], 10);
+    if (isNaN(fee) || fee < 0) { K.err = 'Isi ongkir dengan angka (boleh 0).'; return render(); }
+    run(function () { return db.rpc('approve_delivery', { p_order: o.id, p_fee: fee }); }, function () { return loadOrders(true); });
+  }
+  function reject(o) {
+    var why = window.prompt('Alasan penolakan (akan dibaca pelanggan):', 'Terlalu jauh');
+    if (!why || !why.trim()) return;
+    run(function () { return db.rpc('reject_delivery', { p_order: o.id, p_reason: why.trim() }); }, function () { return loadOrders(true); });
+  }
+  function markPaid(o) {
+    run(function () { return db.rpc('mark_paid', { p_order: o.id }); }, function () { return loadOrders(true); });
+  }
+  function setStatus(o, st) {
+    run(function () { return db.from('orders').update({ status: st }).eq('id', o.id); }, function () { return loadOrders(true); });
+  }
+  function cancelOrder(o) {
+    if (!window.confirm('Batalkan pesanan ' + o.queue_no + '? Stok akan dikembalikan.')) return;
+    setStatus(o, 'dibatalkan');
+  }
+
+  // aksi stok
+  function qtyOf(id) { var n = parseInt(K.stockIn[id], 10); return isNaN(n) ? null : n; }
+  function stockAct(s, kind) {
+    var n = qtyOf(s.id);
+    if (n === null || n < 0 || (kind !== 'atur' && n < 1)) { K.err = kind === 'atur' ? 'Isi jumlah stok (angka 0 atau lebih).' : 'Isi jumlah dengan angka lebih dari 0.'; return render(); }
+    var fn = kind === 'tambah' ? function () { return db.rpc('add_stock', { p_item: s.id, p_qty: n, p_reason: 'produksi', p_note: 'Produksi (kasir)' }); }
+           : kind === 'rusak'  ? function () { return db.rpc('add_stock', { p_item: s.id, p_qty: -n, p_reason: 'rusak', p_note: 'Dicatat dari kasir' }); }
+           :                     function () { return db.rpc('set_stock', { p_item: s.id, p_qty: n, p_note: 'Hitung fisik (kasir)' }); };
+    run(fn, async function () { K.stockIn[s.id] = ''; await loadStock(); });
+  }
+
+  // aksi menu (admin)
+  function saveMenu(m) {
+    var e = K.menuEdit[m.id] || {};
+    var price = e.price !== undefined ? parseInt(e.price, 10) : m.price;
+    var desc = e.desc !== undefined ? e.desc : (m.description || '');
+    if (isNaN(price) || price < 0) { K.err = 'Harga harus berupa angka.'; return render(); }
+    run(function () { return db.from('menu_items').update({ price: price, description: desc.trim() || null }).eq('id', m.id); },
+      async function () { delete K.menuEdit[m.id]; K.info = 'Menu ' + m.name + ' tersimpan.'; await loadMenu(); });
+  }
+  function addMenu() {
+    var f = K.newMenu, price = parseInt(f.price, 10);
+    if (!f.name.trim()) { K.err = 'Nama menu wajib diisi.'; return render(); }
+    if (isNaN(price) || price < 0) { K.err = 'Harga harus berupa angka.'; return render(); }
+    if (!f.newCat.trim() && !f.cat) { K.err = 'Pilih kategori atau tulis kategori baru.'; return render(); }
+    run(async function () {
+      var catId = parseInt(f.cat, 10);
+      if (f.newCat.trim()) {
+        var max = K.cats.reduce(function (a, c) { return Math.max(a, c.sort_order || 0); }, 0);
+        var cr = await db.from('menu_categories').insert({ name: f.newCat.trim(), sort_order: max + 1 }).select().single();
+        if (cr.error) return cr;
+        catId = cr.data.id;
+      }
+      var urut = K.menu.filter(function (m) { return m.category_id === catId; }).length + 1;
+      return db.from('menu_items').insert({ category_id: catId, name: f.name.trim(), description: f.desc.trim() || null, price: price, sort_order: urut });
+    }, async function () {
+      if (!K.err) { K.newMenu = { cat: '', newCat: '', name: '', price: '', desc: '' }; K.info = 'Menu baru ditambahkan. Isi stoknya di tab Stok agar bisa dipesan.'; }
+      await loadMenu();
+    });
+  }
+
+  async function downloadCsv() {
+    var r;
+    try { r = await db.from('daily_sales').select('*').order('hari', { ascending: false }).limit(90); } catch (e) { r = { error: e }; }
+    if (r.error) { K.err = cleanErr(r.error); return render(); }
+    var cols = ['hari', 'jumlah_pesanan', 'omzet', 'total_ongkir', 'pesanan_bungkus', 'pesanan_makan_ditempat', 'pesanan_antar'];
+    var csv = [cols.join(',')].concat((r.data || []).map(function (x) { return cols.map(function (c) { return x[c]; }).join(','); })).join('\n');
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'penjualan-harian-ea-dimsum.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+
+  // ---------- tampilan: kerangka ----------
+  function viewApp() {
+    var admin = K.profile.role === 'admin';
+    var perlu = K.orders.filter(function (o) { return o.status === 'menunggu_persetujuan' || o.status === 'baru'; }).length;
+    var tabs = [['pesanan', 'Pesanan'], ['stok', 'Stok'], ['laporan', 'Laporan']];
+    if (admin) tabs.push(['menu', 'Menu']);
+    return h('div', null,
+      h('div', { class: 'hdr' }, h('div', { class: 'in' },
+        h('b', null, 'EA Dimsum · Kasir'),
+        h('div', { class: 'who' }, h('span', null, K.profile.full_name + ' (' + K.profile.role + ')'),
+          h('button', { class: 'out', onClick: logout }, 'Keluar')))),
+      h('div', { class: 'page' },
+        h('div', { class: 'tabs', role: 'tablist' }, tabs.map(function (t) {
+          return h('button', { class: 'tab' + (K.tab === t[0] ? ' on' : ''), role: 'tab', 'aria-selected': K.tab === t[0] ? 'true' : 'false', onClick: function () { setTab(t[0]); } },
+            t[1], (t[0] === 'pesanan' && perlu) ? h('span', { class: 'cnt' }, perlu) : null);
+        })),
+        K.err ? h('div', { class: 'alert bad', role: 'alert' }, K.err) : null,
+        K.info ? h('div', { class: 'alert good', role: 'status' }, K.info) : null,
+        K.tab === 'pesanan' ? viewOrders() : K.tab === 'stok' ? viewStock() : K.tab === 'laporan' ? viewReport() : viewMenu()));
+  }
+
+  // ---------- tampilan: pesanan ----------
+  function filtered() {
+    var f = K.filter;
+    var list = K.orders.filter(function (o) {
+      if (f === 'aktif') return ACTIVE.indexOf(o.status) >= 0;
+      if (f === 'selesai') return o.status === 'selesai';
+      if (f === 'batal') return o.status === 'ditolak' || o.status === 'dibatalkan';
+      return true;
+    });
+    list.sort(function (a, b) {
+      if (f === 'aktif') {
+        var pa = a.status === 'menunggu_persetujuan' ? 0 : 1, pb = b.status === 'menunggu_persetujuan' ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+        return new Date(a.created_at) - new Date(b.created_at);
+      }
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+    return list;
+  }
+  function viewOrders() {
+    var counts = {
+      aktif: K.orders.filter(function (o) { return ACTIVE.indexOf(o.status) >= 0; }).length,
+      selesai: K.orders.filter(function (o) { return o.status === 'selesai'; }).length,
+      batal: K.orders.filter(function (o) { return o.status === 'ditolak' || o.status === 'dibatalkan'; }).length,
+      semua: K.orders.length
+    };
+    var fs = [['aktif', 'Aktif'], ['selesai', 'Selesai'], ['batal', 'Ditolak / batal'], ['semua', 'Semua hari ini']];
+    var list = filtered();
+    return h('div', null,
+      h('div', { class: 'chips' }, fs.map(function (f) {
+        return h('button', { class: 'chip' + (K.filter === f[0] ? ' on' : ''), onClick: function () { K.filter = f[0]; render(); } }, f[1] + ' (' + counts[f[0]] + ')');
+      })),
+      list.length ? h('div', { class: 'grid' }, list.map(orderCard)) : h('p', { class: 'empty' }, K.filter === 'aktif' ? 'Belum ada pesanan aktif.' : 'Tidak ada pesanan.'));
+  }
+  function orderCard(o) {
+    var fin = o.status === 'selesai' || o.status === 'ditolak' || o.status === 'dibatalkan';
+    var paid = o.payment_status === 'lunas';
+    var detail = o.order_type === 'bungkus' ? 'Ambil: ' + (o.pickup_note || '-')
+               : o.order_type === 'makan' ? 'Meja ' + (o.table_no || '-')
+               : 'Antar ke: ' + (o.delivery_address || '-');
+    var acts = [];
+    if (o.status === 'menunggu_persetujuan') {
+      acts.push(h('div', { class: 'box' },
+        h('label', { class: 'lbl', for: 'fee-' + o.id }, 'Ongkir (Rp)'),
+        h('input', { type: 'number', min: '0', step: '500', inputmode: 'numeric', id: 'fee-' + o.id, placeholder: 'Contoh: 8000', value: K.fee[o.id] || '', onInput: function (e) { K.fee[o.id] = e.target.value; } }),
+        h('div', { class: 'btns', style: 'margin-top:8px' },
+          h('button', { class: 'b-main', disabled: K.busy, onClick: function () { approve(o); } }, 'Setujui + kirim ongkir'),
+          h('button', { class: 'b-out', disabled: K.busy, onClick: function () { reject(o); } }, 'Tolak'))));
+    } else if (!fin) {
+      var row = [];
+      if (!paid) row.push(h('button', { class: o.status === 'menunggu_pembayaran' ? 'b-main' : 'b-out', disabled: K.busy, onClick: function () { markPaid(o); } },
+        o.status === 'menunggu_pembayaran' ? 'Tandai lunas (masuk dapur)' : 'Tandai lunas'));
+      var nx = NEXT[o.status];
+      if (nx) {
+        var blocked = nx[0] === 'selesai' && !paid;
+        row.push(h('button', { class: 'b-main', disabled: K.busy || blocked, title: blocked ? 'Tandai lunas dulu' : null, onClick: function () { setStatus(o, nx[0]); } }, nx[1]));
+      }
+      row.push(h('button', { class: 'b-del', disabled: K.busy, onClick: function () { cancelOrder(o); } }, 'Batalkan'));
+      acts.push(h('div', { class: 'btns' }, row));
+      if (o.status === 'siap' && !paid) acts.push(h('div', { class: 'small redup' }, 'Tandai lunas dulu sebelum menyelesaikan pesanan.'));
+    }
+    return h('div', { class: 'card' },
+      h('div', { class: 'row' }, h('span', { class: 'no' }, o.queue_no), h('span', { class: 'badge ' + (BADGE[o.status] || 'b-end') }, LABEL[o.status] || o.status)),
+      h('div', null, h('b', null, o.customer_name), h('span', { class: 'redup' }, ' · ' + TYPE[o.order_type] + ' · ' + jam(o.created_at))),
+      o.customer_phone ? h('div', { class: 'small redup' }, 'WA: ' + o.customer_phone) : null,
+      h('div', { class: 'box small' }, detail),
+      h('div', { class: 'lines' }, (o.order_items || []).map(function (it) {
+        return h('div', { class: 'row' }, h('span', null, it.qty + ' x ' + it.item_name + (it.note ? ' (' + it.note + ')' : '')), h('span', null, rp(it.line_total)));
+      })),
+      h('div', { class: 'dash lines' },
+        o.order_type === 'antar' && Number(o.delivery_fee) > 0 ? h('div', { class: 'row small redup' }, h('span', null, 'Ongkir'), h('span', null, rp(o.delivery_fee))) : null,
+        h('div', { class: 'row total' }, h('span', null, 'Total'), h('span', null, rp(o.total))),
+        h('div', { class: 'row small' }, h('span', { class: 'redup' }, 'Pembayaran'), h('b', { style: paid ? 'color:#17684D' : 'color:#8A5A00' }, paid ? 'Lunas' : 'Belum lunas'))),
+      o.status === 'ditolak' && o.reject_reason ? h('div', { class: 'small redup' }, 'Alasan: ' + o.reject_reason) : null,
+      acts);
+  }
+
+  // ---------- tampilan: stok ----------
+  function viewStock() {
+    if (!K.stock.length) return h('p', { class: 'empty' }, 'Memuat stok...');
+    var tone = { aman: 'b-ok', menipis: 'b-wait', habis: 'b-bad', 'tidak dilacak': 'b-end' };
+    return h('div', null,
+      h('p', { class: 'redup' }, 'Isi stok tiap pagi. Stok berkurang otomatis saat ada pesanan, dan menu otomatis "Habis" saat stok 0.'),
+      h('div', { class: 'sgrid' }, K.stock.map(function (s) {
+        return h('div', { class: 'card' },
+          h('div', { class: 'row' }, h('div', null, h('b', null, s.menu), h('span', { class: 'redup' }, ' · ' + s.kategori)),
+            h('span', { class: 'badge ' + (tone[s.status] || 'b-end') }, s.status)),
+          h('div', { class: 'no' }, s.stok + ' cup'),
+          h('div', { class: 'sctl' },
+            h('input', { type: 'number', min: '0', inputmode: 'numeric', 'aria-label': 'Jumlah untuk ' + s.menu, placeholder: 'Jumlah', value: K.stockIn[s.id] || '', onInput: function (e) { K.stockIn[s.id] = e.target.value; } }),
+            h('button', { class: 'b-main', disabled: K.busy, onClick: function () { stockAct(s, 'tambah'); } }, 'Tambah'),
+            h('button', { class: 'b-out', disabled: K.busy, onClick: function () { stockAct(s, 'atur'); } }, 'Atur jadi'),
+            h('button', { class: 'b-del', disabled: K.busy, onClick: function () { stockAct(s, 'rusak'); } }, 'Rusak')));
+      })));
+  }
+
+  // ---------- tampilan: laporan ----------
+  function viewReport() {
+    if (!K.rep) return h('p', { class: 'empty' }, 'Memuat laporan...');
+    var R = K.rep, t = todayStr();
+    var hari = R.daily.filter(function (d) { return d.hari === t; })[0] || { jumlah_pesanan: 0, omzet: 0, total_ongkir: 0 };
+    var maxO = R.hour.reduce(function (a, x) { return Math.max(a, Number(x.omzet) || 0); }, 0) || 1;
+    return h('div', null,
+      h('p', { class: 'redup small' }, 'Laporan menghitung pesanan yang sudah selesai dan lunas.'),
+      h('div', { class: 'stats' },
+        h('div', { class: 'card stat' }, h('div', { class: 'redup small' }, 'Pesanan hari ini'), h('div', { class: 'v' }, Number(hari.jumlah_pesanan))),
+        h('div', { class: 'card stat' }, h('div', { class: 'redup small' }, 'Omzet hari ini'), h('div', { class: 'v' }, rp(hari.omzet))),
+        h('div', { class: 'card stat' }, h('div', { class: 'redup small' }, 'Ongkir hari ini'), h('div', { class: 'v' }, rp(hari.total_ongkir)))),
+      h('h2', null, 'Menu terlaris hari ini'),
+      R.top.length ? h('div', { class: 'card tw' }, h('table', null,
+        h('thead', null, h('tr', null, h('th', null, 'Menu'), h('th', { class: 'n' }, 'Terjual'), h('th', { class: 'n' }, 'Omzet'))),
+        h('tbody', null, R.top.map(function (x) { return h('tr', null, h('td', null, x.menu), h('td', { class: 'n' }, Number(x.jumlah_terjual)), h('td', { class: 'n' }, rp(x.omzet))); }))))
+        : h('p', { class: 'redup' }, 'Belum ada penjualan selesai hari ini.'),
+      h('h2', null, 'Jam ramai hari ini'),
+      R.hour.length ? h('div', { class: 'card' }, R.hour.map(function (x) {
+        return h('div', { class: 'hrow' }, h('span', null, String(x.jam).padStart(2, '0') + ':00'),
+          h('div', null, h('div', { class: 'bar', style: 'width:' + Math.max(2, Math.round(Number(x.omzet) / maxO * 100)) + '%' })),
+          h('span', { class: 'small' }, x.jumlah_pesanan + ' pesanan'));
+      })) : h('p', { class: 'redup' }, 'Belum ada data.'),
+      h('h2', null, '7 hari terakhir'),
+      R.daily.length ? h('div', { class: 'card tw' }, h('table', null,
+        h('thead', null, h('tr', null, h('th', null, 'Hari'), h('th', { class: 'n' }, 'Pesanan'), h('th', { class: 'n' }, 'Omzet'), h('th', { class: 'n' }, 'Bungkus'), h('th', { class: 'n' }, 'Makan'), h('th', { class: 'n' }, 'Antar'))),
+        h('tbody', null, R.daily.map(function (d) {
+          return h('tr', null, h('td', null, tgl(d.hari)), h('td', { class: 'n' }, Number(d.jumlah_pesanan)), h('td', { class: 'n' }, rp(d.omzet)),
+            h('td', { class: 'n' }, Number(d.pesanan_bungkus)), h('td', { class: 'n' }, Number(d.pesanan_makan_ditempat)), h('td', { class: 'n' }, Number(d.pesanan_antar)));
+        })))) : h('p', { class: 'redup' }, 'Belum ada data.'),
+      h('div', { class: 'btns', style: 'margin-top:10px' }, h('button', { class: 'b-out', onClick: downloadCsv }, 'Unduh CSV harian (untuk Google Sheets)')),
+      h('h2', null, 'Per bulan'),
+      R.month.length ? h('div', { class: 'card tw' }, h('table', null,
+        h('thead', null, h('tr', null, h('th', null, 'Bulan'), h('th', { class: 'n' }, 'Pesanan'), h('th', { class: 'n' }, 'Omzet'), h('th', { class: 'n' }, 'Ongkir'))),
+        h('tbody', null, R.month.map(function (d) {
+          return h('tr', null, h('td', null, bulan(d.bulan)), h('td', { class: 'n' }, Number(d.jumlah_pesanan)), h('td', { class: 'n' }, rp(d.omzet)), h('td', { class: 'n' }, rp(d.total_ongkir)));
+        })))) : h('p', { class: 'redup' }, 'Belum ada data.'));
+  }
+
+  // ---------- tampilan: menu (admin) ----------
+  function viewMenu() {
+    var f = K.newMenu;
+    return h('div', null,
+      h('h2', { style: 'margin-top:4px' }, 'Tambah menu baru'),
+      h('div', { class: 'card' },
+        h('div', { class: 'two' },
+          h('div', null, h('label', { class: 'lbl', for: 'nm-cat' }, 'Kategori'),
+            h('select', { id: 'nm-cat', onChange: function (e) { f.cat = e.target.value; } },
+              h('option', { value: '' }, '- pilih -'),
+              K.cats.map(function (c) { return h('option', { value: c.id, selected: String(f.cat) === String(c.id) }, c.name); }))),
+          h('div', null, h('label', { class: 'lbl', for: 'nm-newcat' }, 'atau kategori baru'),
+            h('input', { type: 'text', id: 'nm-newcat', placeholder: 'Contoh: Minuman', value: f.newCat, onInput: function (e) { f.newCat = e.target.value; } }))),
+        h('div', { class: 'two' },
+          h('div', null, h('label', { class: 'lbl', for: 'nm-name' }, 'Nama menu'),
+            h('input', { type: 'text', id: 'nm-name', value: f.name, onInput: function (e) { f.name = e.target.value; } })),
+          h('div', null, h('label', { class: 'lbl', for: 'nm-price' }, 'Harga (Rp)'),
+            h('input', { type: 'number', min: '0', inputmode: 'numeric', id: 'nm-price', value: f.price, onInput: function (e) { f.price = e.target.value; } }))),
+        h('div', null, h('label', { class: 'lbl', for: 'nm-desc' }, 'Keterangan (isi, ukuran)'),
+          h('input', { type: 'text', id: 'nm-desc', value: f.desc, onInput: function (e) { f.desc = e.target.value; } })),
+        h('div', { class: 'btns' }, h('button', { class: 'b-main', disabled: K.busy, onClick: addMenu }, 'Tambah menu')),
+        h('div', { class: 'small redup' }, 'Menu baru stoknya 0. Isi stok di tab Stok agar bisa dipesan.')),
+      h('h2', null, 'Daftar menu'),
+      K.menu.length ? h('div', { class: 'sgrid' }, K.menu.map(function (m) {
+        var e = K.menuEdit[m.id] || {};
+        return h('div', { class: 'card' },
+          h('div', { class: 'row' }, h('div', null, h('b', null, m.name), h('span', { class: 'redup' }, ' · ' + ((m.menu_categories && m.menu_categories.name) || ''))),
+            h('span', { class: 'small redup' }, 'stok ' + m.stock_qty)),
+          h('div', { class: 'two' },
+            h('div', null, h('label', { class: 'lbl', for: 'p-' + m.id }, 'Harga (Rp)'),
+              h('input', { type: 'number', min: '0', inputmode: 'numeric', id: 'p-' + m.id, value: e.price !== undefined ? e.price : m.price, onInput: function (ev) { (K.menuEdit[m.id] = K.menuEdit[m.id] || {}).price = ev.target.value; } })),
+            h('div', null, h('label', { class: 'lbl', for: 'd-' + m.id }, 'Keterangan'),
+              h('input', { type: 'text', id: 'd-' + m.id, value: e.desc !== undefined ? e.desc : (m.description || ''), onInput: function (ev) { (K.menuEdit[m.id] = K.menuEdit[m.id] || {}).desc = ev.target.value; } }))),
+          h('div', { class: 'btns' }, h('button', { class: 'b-out', disabled: K.busy, onClick: function () { saveMenu(m); } }, 'Simpan')));
+      })) : h('p', { class: 'redup' }, 'Memuat menu...'));
+  }
+
+  // ---------- mulai ----------
+  async function init() {
+    var r;
+    try { r = await db.auth.getSession(); } catch (e) { r = {}; }
+    if (r && r.data && r.data.session) await afterLogin(r.data.session.user);
+    else { K.ready = true; render(); }
+    db.auth.onAuthStateChange(function (ev) {
+      if (ev === 'SIGNED_OUT' && K.profile) { teardown(); K.profile = null; K.orders = []; render(); }
+    });
+  }
+  render();
+  init();
+})();
+</script>
+</body>
+</html>
