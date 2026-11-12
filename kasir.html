@@ -18,9 +18,9 @@
   button, input, select { font-family: inherit; font-size: inherit; }
   button { cursor: pointer; }
   button:disabled { opacity: .55; cursor: default; }
-  .page { max-width: 1040px; margin: 0 auto; padding: 0 16px 40px; }
-  .hdr { background: var(--grad); color: #fff; }
-  .hdr .in { max-width: 1040px; margin: 0 auto; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .page { max-width: 1280px; margin: 0 auto; padding: 0 16px 40px; }
+  .hdr { background: var(--grad); color: #fff; position: sticky; top: 0; z-index: 5; box-shadow: 0 4px 14px rgba(74,45,23,.2); }
+  .hdr .in { max-width: 1280px; margin: 0 auto; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .hdr b { font-size: 18px; font-weight: 800; }
   .hdr .who { display: flex; align-items: center; gap: 10px; }
   .hdr .out { min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1.5px solid rgba(255,255,255,.7); background: transparent; color: #fff; font-weight: 700; }
@@ -75,6 +75,25 @@
   .sctl input { width: 110px; }
   .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
   h2 { font-size: 16px; margin: 18px 0 8px; font-weight: 800; }
+  .mfoto { width: 84px; height: 84px; flex: none; border-radius: 12px; background: linear-gradient(135deg, #F6EBDC, #E8D3B8); display: flex; align-items: center; justify-content: center; font-size: 34px; overflow: hidden; }
+  .mfoto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .mhead { display: flex; gap: 12px; align-items: center; }
+  .mhead .grow { flex: 1; min-width: 0; }
+  .file { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+  .sgrid { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); align-items: start; }
+  .card { box-shadow: 0 1px 2px rgba(74,45,23,.05); }
+  @media (min-width: 900px) {
+    body { font-size: 15px; }
+    .page { padding: 0 28px 48px; }
+    .hdr .in { padding: 16px 28px; }
+    .hdr b { font-size: 21px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+    .card { padding: 18px; }
+    .no { font-size: 20px; }
+    .stats { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+    .stat .v { font-size: 26px; }
+  }
+  @media (min-width: 1400px) { body { font-size: 16px; } }
 </style>
 </head>
 <body>
@@ -269,7 +288,7 @@
   async function loadMenu() {
     var a, b;
     try {
-      a = await db.from('menu_items').select('id,category_id,name,description,price,is_available,stock_qty,menu_categories(name)');
+      a = await db.from('menu_items').select('id,category_id,name,description,price,is_available,stock_qty,image_url,menu_categories(name)');
       b = await db.from('menu_categories').select('id,name,sort_order').order('sort_order');
     } catch (e) { a = { error: e }; b = {}; }
     if (a.error || b.error) K.err = cleanErr(a.error || b.error);
@@ -406,6 +425,49 @@
     if (isNaN(price) || price < 0) { K.err = 'Harga harus berupa angka.'; return render(); }
     run(function () { return db.from('menu_items').update({ price: price, description: desc.trim() || null }).eq('id', m.id); },
       async function () { delete K.menuEdit[m.id]; K.info = 'Menu ' + m.name + ' tersimpan.'; await loadMenu(); });
+  }
+  // foto menu: kecilkan di HP/laptop dulu (maks 900 px, JPEG) lalu unggah ke Storage
+  function shrink(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var sc = Math.min(1, 900 / Math.max(img.width, img.height));
+        var c = document.createElement('canvas');
+        c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+        var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(function (b) { b ? resolve(b) : reject(new Error('Foto tidak bisa diproses.')); }, 'image/jpeg', 0.82);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('File bukan gambar yang valid.')); };
+      img.src = url;
+    });
+  }
+  function pathOf(url) { var i = (url || '').indexOf('/menu-foto/'); return i < 0 ? null : url.slice(i + 11).split('?')[0]; }
+  function uploadPhoto(m, file) {
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { K.err = 'Pilih file gambar (JPG atau PNG).'; return render(); }
+    run(async function () {
+      var blob;
+      try { blob = await shrink(file); } catch (e) { return { error: e }; }
+      var path = 'm' + m.id + '-' + Date.now() + '.jpg';
+      var up = await db.storage.from('menu-foto').upload(path, blob, { contentType: 'image/jpeg' });
+      if (up.error) return up;
+      var pub = db.storage.from('menu-foto').getPublicUrl(path);
+      var r = await db.from('menu_items').update({ image_url: pub.data.publicUrl }).eq('id', m.id);
+      if (r.error) return r;
+      var old = pathOf(m.image_url);
+      if (old) { try { await db.storage.from('menu-foto').remove([old]); } catch (e) {} }
+      return r;
+    }, async function () { if (!K.err) K.info = 'Foto ' + m.name + ' tersimpan.'; await loadMenu(); });
+  }
+  function removePhoto(m) {
+    if (!confirm('Hapus foto ' + m.name + '?')) return;
+    run(async function () {
+      var r = await db.from('menu_items').update({ image_url: null }).eq('id', m.id);
+      var old = pathOf(m.image_url);
+      if (!r.error && old) { try { await db.storage.from('menu-foto').remove([old]); } catch (e) {} }
+      return r;
+    }, async function () { if (!K.err) K.info = 'Foto ' + m.name + ' dihapus.'; await loadMenu(); });
   }
   function addMenu() {
     var f = K.newMenu, price = parseInt(f.price, 10);
@@ -655,8 +717,16 @@
       K.menu.length ? h('div', { class: 'sgrid' }, K.menu.map(function (m) {
         var e = K.menuEdit[m.id] || {};
         return h('div', { class: 'card' },
-          h('div', { class: 'row' }, h('div', null, h('b', null, m.name), h('span', { class: 'redup' }, ' · ' + ((m.menu_categories && m.menu_categories.name) || ''))),
-            h('span', { class: 'small redup' }, 'stok ' + m.stock_qty)),
+          h('div', { class: 'mhead' },
+            h('div', { class: 'mfoto', 'aria-hidden': 'true' }, m.image_url ? h('img', { src: m.image_url, alt: '' }) : '🥟'),
+            h('div', { class: 'grow' },
+              h('div', null, h('b', null, m.name)),
+              h('div', { class: 'small redup' }, ((m.menu_categories && m.menu_categories.name) || '') + ' · stok ' + m.stock_qty),
+              h('div', { class: 'btns', style: 'margin-top:6px' },
+                h('label', { class: 'b-out', style: 'display:inline-flex;align-items:center;cursor:pointer' }, m.image_url ? 'Ganti foto' : 'Tambah foto',
+                  h('input', { type: 'file', accept: 'image/*', class: 'file', id: 'ph-' + m.id, 'aria-label': 'Foto ' + m.name,
+                    onChange: function (ev) { uploadPhoto(m, ev.target.files && ev.target.files[0]); } })),
+                m.image_url ? h('button', { class: 'b-del', disabled: K.busy, onClick: function () { removePhoto(m); } }, 'Hapus foto') : null))),
           h('div', { class: 'two' },
             h('div', null, h('label', { class: 'lbl', for: 'p-' + m.id }, 'Harga (Rp)'),
               h('input', { type: 'number', min: '0', inputmode: 'numeric', id: 'p-' + m.id, value: e.price !== undefined ? e.price : m.price, onInput: function (ev) { (K.menuEdit[m.id] = K.menuEdit[m.id] || {}).price = ev.target.value; } })),
