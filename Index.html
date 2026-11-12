@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pesan EA Dimsum</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gelap: #4A2D17; --kayu: #7A4A25; --terang: #9A6431;
+    --bg: #FBF9F6; --teks: #2B1B10; --garis: #E8DDD0; --redup: #6F5C4C;
+    --krem: #F1E6D8; --hijau: #17684D; --merah: #A32A1F;
+    --grad: repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0, rgba(255,255,255,.05) 2px, transparent 2px, transparent 9px), linear-gradient(135deg, #4A2D17, #7A4A25 55%, #9A6431);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--teks); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; line-height: 1.4; }
+  button, input { font-family: inherit; font-size: inherit; }
+  button { cursor: pointer; }
+  .wrap { max-width: 520px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+  .hero { background: var(--grad); color: #fff; padding: 28px 20px 20px; border-radius: 0 0 20px 20px; margin-bottom: 12px; }
+  .hero .brand { font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+  .hero h1 { margin: 2px 0; font-size: 24px; line-height: 1.2; font-weight: 800; }
+  .hero p { margin: 0; opacity: .92; }
+  .pad { padding: 4px 20px 12px; }
+  .redup { color: var(--redup); }
+  .center { text-align: center; }
+  .err { color: var(--merah); font-weight: 600; margin: 0 0 8px; }
+  .chips { display: flex; gap: 8px; padding: 4px 20px 12px; overflow-x: auto; }
+  .chip { flex: none; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid #DCCDBB; background: #fff; color: var(--teks); font-weight: 600; }
+  .chip.on { background: var(--kayu); border-color: var(--kayu); color: #fff; }
+  .list { flex: 1; padding: 0 20px 12px; display: flex; flex-direction: column; gap: 12px; }
+  .card { background: #fff; border: 1px solid var(--garis); border-radius: 14px; padding: 12px; }
+  .item { display: flex; gap: 12px; align-items: center; }
+  .item.off { opacity: .55; }
+  .foto { width: 64px; height: 64px; flex: none; border-radius: 10px; background: var(--krem); color: var(--redup); font-size: 11px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .foto img { width: 100%; height: 100%; object-fit: cover; }
+  .info { flex: 1; min-width: 0; }
+  .nama { font-weight: 700; }
+  .ket { color: var(--redup); font-size: 12px; }
+  .harga { font-weight: 700; margin-top: 4px; }
+  .ctl { width: 116px; flex: none; display: flex; justify-content: flex-end; }
+  .btn-add { min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1.5px solid var(--kayu); background: #fff; color: var(--kayu); font-weight: 700; }
+  .qty { display: flex; align-items: center; gap: 4px; }
+  .qbtn { width: 44px; height: 44px; border-radius: 12px; border: 1px solid #DCCDBB; background: #fff; font-size: 20px; color: var(--teks); }
+  .qbtn.plus { border: 0; background: var(--kayu); color: #fff; }
+  .qnum { min-width: 18px; text-align: center; font-weight: 700; }
+  .habis { font-weight: 700; color: var(--merah); }
+  .bar { position: sticky; bottom: 0; background: #fff; border-top: 1px solid var(--garis); padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; }
+  .btn { width: 100%; min-height: 52px; border: 0; border-radius: 14px; background: var(--grad); color: #fff; font-weight: 700; font-size: 15px; display: flex; justify-content: space-between; align-items: center; padding: 0 18px; }
+  .btn.solo { justify-content: center; }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .btn-ghost { min-height: 44px; padding: 8px 14px; border-radius: 12px; border: 1.5px solid var(--kayu); background: #fff; color: var(--kayu); font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+  .top { display: flex; align-items: center; gap: 4px; padding: 16px 12px 8px; }
+  .top h1 { margin: 0; font-size: 18px; font-weight: 800; }
+  .link { min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: var(--kayu); font-weight: 700; }
+  .body { flex: 1; padding: 4px 20px 16px; display: flex; flex-direction: column; gap: 16px; }
+  .row { display: flex; justify-content: space-between; gap: 12px; }
+  .lines { display: flex; flex-direction: column; gap: 8px; }
+  .lbl { font-weight: 700; display: block; margin-bottom: 6px; }
+  .seg { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type=text], input[type=tel] { width: 100%; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid #DCCDBB; background: #fff; color: var(--teks); font-size: 15px; }
+  .note { color: var(--redup); font-size: 13px; margin: 6px 0 0; }
+  .box { background: var(--krem); border-radius: 12px; padding: 12px 14px; }
+  .total { font-weight: 800; font-size: 16px; }
+  .queue { background: var(--grad); color: #fff; border-radius: 16px; padding: 18px 20px; }
+  .queue .no { font-size: 36px; font-weight: 800; line-height: 1.1; }
+  .queue .sub { margin-top: 6px; opacity: .92; }
+  .steps { display: flex; flex-direction: column; gap: 14px; }
+  .step { display: flex; align-items: center; gap: 12px; }
+  .dot { width: 18px; height: 18px; flex: none; border-radius: 9px; border: 2px solid #D9CBB9; background: #fff; }
+  .step.done .dot { background: var(--hijau); border-color: var(--hijau); }
+  .step.now .dot { border-color: var(--kayu); }
+  .step .t { flex: 1; color: var(--redup); }
+  .step.done .t, .step.now .t { color: var(--teks); font-weight: 700; }
+  .step .s { font-size: 12px; color: var(--redup); }
+  .banner { border-radius: 12px; padding: 12px 14px; font-weight: 600; }
+  .banner.bad { background: #F8DAD6; color: #7E1A12; }
+  .banner.info { background: #FFF4DB; color: #5C3A00; }
+  .banner.good { background: #D5EDE3; color: #0E4F39; }
+  .struk { display: flex; flex-direction: column; gap: 12px; padding: 18px; }
+  .struk .judul { text-align: center; }
+  .struk .judul b { font-size: 18px; font-weight: 800; }
+  .dash { border-top: 1px dashed #DCCDBB; padding-top: 12px; }
+  .acts { display: flex; flex-direction: column; gap: 8px; }
+  @media print {
+    .noprint { display: none !important; }
+    body { background: #fff; }
+    .hero, .queue { background: #fff !important; color: #000 !important; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<noscript><p style="padding:20px">Halaman ini membutuhkan JavaScript. Aktifkan JavaScript di browser Anda.</p></noscript>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+(function () {
+  'use strict';
+  var cfg = window.EA_CONFIG || {};
+  var root = document.getElementById('app');
+
+  // ---------- pembantu ----------
+  function h(tag, attrs) {
+    var e = document.createElement(tag);
+    if (attrs) {
+      Object.keys(attrs).forEach(function (k) {
+        var v = attrs[k];
+        if (v === null || v === undefined || v === false) return;
+        if (k === 'class') e.className = v;
+        else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2).toLowerCase(), v);
+        else if (k === 'value') e.value = v;
+        else e.setAttribute(k, v === true ? '' : v);
+      });
+    }
+    (function add(list) {
+      list.forEach(function (c) {
+        if (c === null || c === undefined || c === false) return;
+        if (Array.isArray(c)) return add(c);
+        e.appendChild(c.nodeType ? c : document.createTextNode(String(c)));
+      });
+    })(Array.prototype.slice.call(arguments, 2));
+    return e;
+  }
+  function rp(n) { return 'Rp ' + String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+  function getStore(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function setStore(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  var ok = cfg.SUPABASE_URL && cfg.SUPABASE_URL.indexOf('XXXX') === -1 &&
+           cfg.SUPABASE_ANON_KEY && cfg.SUPABASE_ANON_KEY.indexOf('ISI_') !== 0;
+  if (!ok || !window.supabase) {
+    root.appendChild(h('div', { class: 'wrap' }, h('p', { class: 'pad err' },
+      !ok ? 'Aplikasi belum dikonfigurasi. Isi config.js terlebih dahulu.' : 'Library gagal dimuat. Periksa sambungan internet lalu muat ulang.')));
+    return;
+  }
+  var db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } });
+
+  // ---------- data tetap ----------
+  var TYPES = [['bungkus', 'Bungkus'], ['makan', 'Makan di tempat'], ['antar', 'Antar']];
+  var TIMES = ['Sekarang', '15 menit lagi', '30 menit lagi'];
+  var FINAL = ['selesai', 'ditolak', 'dibatalkan'];
+  var TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  var S = {
+    view: 'menu', menu: [], loading: true, loadErr: '', cat: null, qty: {},
+    type: 'bungkus', time: 'Sekarang', table: '', addr: '',
+    name: getStore('ea_name') || '', phone: getStore('ea_phone') || '',
+    busy: false, msg: '', token: null, order: null, orderErr: ''
+  };
+  var pollTimer = null;
+
+  // ---------- keranjang ----------
+  function categories() {
+    var c = [];
+    S.menu.forEach(function (m) { if (c.indexOf(m.category) < 0) c.push(m.category); });
+    return c;
+  }
+  function cartItems() { return S.menu.filter(function (m) { return (S.qty[m.id] || 0) > 0; }); }
+  function cartCount() { return cartItems().reduce(function (a, m) { return a + S.qty[m.id]; }, 0); }
+  function cartSub() { return cartItems().reduce(function (a, m) { return a + S.qty[m.id] * m.price; }, 0); }
+  function setQty(id, n) { S.qty[id] = Math.max(0, Math.min(50, n)); render(); }
+  function go(v) { S.view = v; S.msg = ''; render(); window.scrollTo(0, 0); }
+
+  // ---------- muat menu ----------
+  async function loadMenu() {
+    S.loading = true; S.loadErr = ''; render();
+    var r;
+    try { r = await db.from('public_menu').select('*'); } catch (e) { r = { error: e }; }
+    if (r.error) {
+      S.loadErr = 'Menu belum bisa dimuat. Periksa sambungan internet lalu coba lagi.';
+    } else {
+      S.menu = r.data || [];
+      var cats = categories();
+      if (!S.cat || cats.indexOf(S.cat) < 0) S.cat = cats[0] || null;
+      S.menu.forEach(function (m) { if (!m.is_available) delete S.qty[m.id]; });
+    }
+    S.loading = false; render();
+  }
+
+  // ---------- kirim pesanan ----------
+  function friendly(msg) {
+    return /^(Stok|Menu|Nama|Pesanan|Alamat|Nomor|Jumlah|Terlalu)/.test(msg || '')
+      ? msg : 'Pesanan belum terkirim. Periksa sambungan internet lalu coba lagi.';
+  }
+  async function submit() {
+    if (S.busy) return;
+    var name = S.name.trim();
+    var items = cartItems().map(function (m) { return { menu_item_id: m.id, qty: S.qty[m.id] }; });
+    if (!items.length) { S.msg = 'Keranjang masih kosong.'; return render(); }
+    if (!name) { S.msg = 'Nama wajib diisi.'; return render(); }
+    if (S.type === 'makan' && !S.table.trim()) { S.msg = 'Nomor meja wajib diisi.'; return render(); }
+    if (S.type === 'antar' && S.addr.trim().length < 5) { S.msg = 'Alamat pengantaran wajib diisi.'; return render(); }
+    S.busy = true; S.msg = ''; render();
+    var r;
+    try {
+      r = await db.rpc('create_order', {
+        p_name: name,
+        p_phone: S.phone.trim() || null,
+        p_type: S.type,
+        p_items: items,
+        p_pickup_note: S.type === 'bungkus' ? S.time : null,
+        p_table_no: S.type === 'makan' ? S.table.trim() : null,
+        p_address: S.type === 'antar' ? S.addr.trim() : null,
+        p_pay: 'kasir'
+      });
+    } catch (e) { r = { error: { message: 'jaringan' } }; }
+    S.busy = false;
+    if (r.error || !r.data || !r.data.token) {
+      S.msg = friendly(r.error && r.error.message);
+      render();
+      loadMenu();
+      return;
+    }
+    setStore('ea_name', name); setStore('ea_phone', S.phone.trim());
+    setStore('ea_last', r.data.token);
+    S.token = r.data.token; S.order = null; S.orderErr = ''; S.qty = {};
+    try { history.replaceState(null, '', '?o=' + S.token); } catch (e) {}
+    go('status');
+    fetchOrder(); startPoll();
+  }
+
+  // ---------- status pesanan ----------
+  function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+  function startPoll() { stopPoll(); pollTimer = setInterval(function () { if (!document.hidden) fetchOrder(); }, 5000); }
+  async function fetchOrder() {
+    if (!S.token) return;
+    if (!TOKEN_RE.test(S.token)) { S.orderErr = 'Link pesanan tidak valid.'; stopPoll(); return render(); }
+    var r;
+    try { r = await db.rpc('get_order_status', { p_token: S.token }); } catch (e) { r = { error: e }; }
+    if (r.error) { S.orderErr = 'Status belum bisa dimuat, mencoba lagi...'; }
+    else if (!r.data) { S.orderErr = 'Pesanan tidak ditemukan. Periksa kembali link Anda.'; S.order = null; stopPoll(); }
+    else { S.order = r.data; S.orderErr = ''; if (FINAL.indexOf(r.data.status) >= 0) stopPoll(); }
+    if (S.view === 'status') render();
+  }
+  function openLast() {
+    S.token = getStore('ea_last'); S.order = null; S.orderErr = '';
+    try { history.replaceState(null, '', '?o=' + S.token); } catch (e) {}
+    go('status'); fetchOrder(); startPoll();
+  }
+  function reset() {
+    stopPoll(); S.token = null; S.order = null; S.orderErr = ''; S.qty = {};
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    go('menu'); loadMenu();
+  }
+  function copyLink(ev) {
+    var btn = ev.currentTarget;
+    var url = location.origin + location.pathname + '?o=' + S.token;
+    function done() { var t = btn.textContent; btn.textContent = 'Link tersalin'; setTimeout(function () { btn.textContent = t; }, 1800); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done, function () { window.prompt('Salin link struk ini:', url); });
+    } else { window.prompt('Salin link struk ini:', url); }
+  }
+
+  // ---------- tampilan: menu ----------
+  function chip(label, on, fn) { return h('button', { class: 'chip' + (on ? ' on' : ''), onClick: fn }, label); }
+
+  function menuCard(m) {
+    var q = S.qty[m.id] || 0, ctrl;
+    if (!m.is_available) ctrl = h('span', { class: 'habis' }, 'Habis');
+    else if (q === 0) ctrl = h('button', { class: 'btn-add', onClick: function () { setQty(m.id, 1); } }, 'Tambah');
+    else ctrl = h('div', { class: 'qty' },
+      h('button', { class: 'qbtn', 'aria-label': 'Kurangi ' + m.name, onClick: function () { setQty(m.id, q - 1); } }, '−'),
+      h('span', { class: 'qnum' }, q),
+      h('button', { class: 'qbtn plus', 'aria-label': 'Tambah ' + m.name, onClick: function () { setQty(m.id, q + 1); } }, '+'));
+    return h('div', { class: 'card item' + (m.is_available ? '' : ' off') },
+      h('div', { class: 'foto', 'aria-hidden': 'true' }, m.image_url ? h('img', { src: m.image_url, alt: '' }) : 'Foto'),
+      h('div', { class: 'info' },
+        h('div', { class: 'nama' }, m.name),
+        h('div', { class: 'ket' }, m.description || ''),
+        h('div', { class: 'harga' }, rp(m.price))),
+      h('div', { class: 'ctl' }, ctrl));
+  }
+
+  function viewMenu() {
+    var cats = categories();
+    var items = S.menu.filter(function (m) { return m.category === S.cat; });
+    var n = cartCount();
+    var body;
+    if (S.loading) body = h('p', { class: 'pad redup' }, 'Memuat menu...');
+    else if (S.loadErr) body = h('div', { class: 'pad' }, h('p', { class: 'err' }, S.loadErr), h('button', { class: 'btn-ghost', onClick: loadMenu }, 'Coba lagi'));
+    else if (!S.menu.length) body = h('p', { class: 'pad redup' }, 'Menu belum tersedia.');
+    else body = [
+      h('div', { class: 'chips' }, cats.map(function (c) { return chip(c, S.cat === c, function () { S.cat = c; render(); }); })),
+      h('main', { class: 'list' }, items.map(menuCard))
+    ];
+    return h('div', { class: 'wrap' },
+      h('header', { class: 'hero' },
+        h('div', { class: 'brand' }, 'EA DIMSUM'),
+        h('h1', null, 'Mau pesan apa hari ini?'),
+        h('p', null, 'Pesan dari HP, ambil tanpa antre.')),
+      (getStore('ea_last') && !S.token) ? h('div', { class: 'pad' }, h('button', { class: 'btn-ghost', onClick: openLast }, 'Lihat pesanan terakhir Anda')) : null,
+      body,
+      h('div', { class: 'bar' }, n > 0
+        ? h('button', { class: 'btn', onClick: function () { go('cart'); } },
+            h('span', null, 'Lihat keranjang · ' + n + ' item'), h('span', null, rp(cartSub())))
+        : h('div', { class: 'redup center' }, 'Pilih menu untuk memulai pesanan')));
+  }
+
+  // ---------- tampilan: keranjang ----------
+  function viewCart() {
+    var lines = cartItems().map(function (m) {
+      return h('div', { class: 'row' }, h('span', null, S.qty[m.id] + ' x ' + m.name), h('span', { class: 'nama' }, rp(S.qty[m.id] * m.price)));
+    });
+    var extra;
+    if (S.type === 'bungkus') {
+      extra = h('div', null, h('span', { class: 'lbl' }, 'Jam ambil'),
+        h('div', { class: 'seg' }, TIMES.map(function (t) { return chip(t, S.time === t, function () { S.time = t; render(); }); })));
+    } else if (S.type === 'makan') {
+      extra = h('div', null, h('label', { class: 'lbl', for: 'f-meja' }, 'Nomor meja'),
+        h('input', { type: 'text', id: 'f-meja', value: S.table, maxlength: '10', placeholder: 'Contoh: 3', onInput: function (e) { S.table = e.target.value; } }));
+    } else {
+      extra = h('div', null, h('label', { class: 'lbl', for: 'f-alamat' }, 'Alamat pengantaran'),
+        h('input', { type: 'text', id: 'f-alamat', value: S.addr, maxlength: '300', placeholder: 'Jalan, nomor, patokan', autocomplete: 'street-address', onInput: function (e) { S.addr = e.target.value; } }),
+        h('p', { class: 'note' }, 'Pesanan antar diperiksa admin dulu. Ongkir ditentukan admin setelah pesanan disetujui, lalu Anda bisa membayar.'));
+    }
+    var payNote = S.type === 'antar'
+      ? 'Pembayaran dilakukan setelah pesanan disetujui admin.'
+      : 'Pembayaran dilakukan langsung di kasir saat pesanan diambil. Pembayaran QRIS segera hadir.';
+    return h('div', { class: 'wrap' },
+      h('div', { class: 'top' }, h('button', { class: 'link', onClick: function () { go('menu'); } }, 'Kembali'), h('h1', null, 'Pesanan Anda')),
+      h('div', { class: 'body' },
+        h('div', { class: 'card lines' }, lines),
+        h('div', null, h('span', { class: 'lbl' }, 'Jenis pesanan'),
+          h('div', { class: 'seg' }, TYPES.map(function (t) { return chip(t[1], S.type === t[0], function () { S.type = t[0]; S.msg = ''; render(); }); }))),
+        extra,
+        h('div', null, h('label', { class: 'lbl', for: 'f-nama' }, 'Atas nama'),
+          h('input', { type: 'text', id: 'f-nama', value: S.name, maxlength: '60', placeholder: 'Nama Anda', autocomplete: 'name', onInput: function (e) { S.name = e.target.value; } })),
+        h('div', null, h('label', { class: 'lbl', for: 'f-hp' }, 'Nomor WhatsApp (opsional)'),
+          h('input', { type: 'tel', id: 'f-hp', value: S.phone, maxlength: '20', placeholder: '08xxxxxxxxxx', autocomplete: 'tel', onInput: function (e) { S.phone = e.target.value; } })),
+        h('div', { class: 'box note' }, payNote)),
+      h('div', { class: 'bar' },
+        S.msg ? h('div', { class: 'err', role: 'alert' }, S.msg) : null,
+        h('div', { class: 'row total' }, h('span', null, 'Subtotal'), h('span', null, rp(cartSub()))),
+        h('button', { class: 'btn solo', disabled: S.busy, onClick: submit }, S.busy ? 'Mengirim...' : (S.type === 'antar' ? 'Ajukan pesanan antar' : 'Kirim pesanan'))));
+  }
+
+  // ---------- tampilan: status + struk ----------
+  function typeLabel(o) { return o.order_type === 'bungkus' ? 'Bungkus' : o.order_type === 'makan' ? 'Makan di tempat' : 'Antar'; }
+  function detailText(o) {
+    if (o.order_type === 'bungkus') return 'Bungkus, ambil ' + String(o.pickup_note || '').toLowerCase();
+    if (o.order_type === 'makan') return 'Makan di tempat, meja ' + (o.table_no || '-');
+    return 'Antar ke: ' + (o.delivery_address || '-');
+  }
+  function stepsFor(o) {
+    if (o.order_type === 'antar') return [['menunggu_persetujuan', 'Menunggu persetujuan admin'], ['menunggu_pembayaran', 'Menunggu pembayaran'], ['baru', 'Pesanan diterima'], ['diproses', 'Sedang diproses'], ['siap', 'Siap diantar'], ['selesai', 'Selesai']];
+    return [['baru', 'Pesanan diterima'], ['diproses', 'Sedang diproses'], ['siap', o.order_type === 'makan' ? 'Siap disajikan' : 'Siap diambil'], ['selesai', 'Selesai']];
+  }
+  function statusMessage(o) {
+    var m = {
+      menunggu_persetujuan: ['info', 'Pesanan antar Anda sedang diperiksa admin. Ongkir ditentukan setelah pesanan disetujui.'],
+      menunggu_pembayaran: ['info', 'Pesanan disetujui. Total sudah termasuk ongkir ' + rp(o.delivery_fee) + '. Silakan bayar ke kasir; pesanan masuk dapur setelah pembayaran dikonfirmasi.'],
+      baru: ['info', 'Pesanan diterima dan masuk antrean dapur.'],
+      diproses: ['info', 'Pesanan sedang disiapkan.'],
+      siap: ['good', o.order_type === 'bungkus' ? 'Pesanan siap diambil. Tunjukkan nomor antrean ke kasir.' : o.order_type === 'makan' ? 'Pesanan siap disajikan.' : 'Pesanan siap diantar.'],
+      selesai: ['good', 'Pesanan selesai. Terima kasih sudah memesan di EA Dimsum!'],
+      ditolak: ['bad', 'Pesanan ditolak' + (o.reject_reason ? ': ' + o.reject_reason : '.')],
+      dibatalkan: ['bad', 'Pesanan dibatalkan.']
+    };
+    return m[o.status] || ['info', ''];
+  }
+  function payText(o) {
+    if (o.payment_status === 'lunas') return 'Lunas';
+    if (o.order_type === 'antar' && o.status === 'menunggu_persetujuan') return 'Belum bisa dibayar';
+    return 'Belum lunas';
+  }
+
+  function viewStatus() {
+    var o = S.order;
+    var kids = [];
+    if (!o) {
+      kids.push(S.orderErr ? h('p', { class: 'err', role: 'alert' }, S.orderErr) : h('p', { class: 'redup' }, 'Memuat pesanan...'));
+    } else {
+      var msg = statusMessage(o);
+      var steps = stepsFor(o), idx = -1;
+      steps.forEach(function (s, i) { if (s[0] === o.status) idx = i; });
+      var stopped = o.status === 'ditolak' || o.status === 'dibatalkan';
+      kids.push(h('div', { class: 'queue' },
+        h('div', null, 'Nomor antrean'), h('div', { class: 'no' }, o.queue_no),
+        h('div', { class: 'sub' }, o.customer_name + ' · ' + typeLabel(o))));
+      kids.push(h('div', { class: 'banner ' + msg[0], role: 'status' }, msg[1]));
+      if (!stopped) {
+        kids.push(h('div', { class: 'card steps' }, steps.map(function (s, i) {
+          var done = i < idx || o.status === 'selesai';
+          var now = i === idx && !done;
+          return h('div', { class: 'step' + (done ? ' done' : '') + (now ? ' now' : '') },
+            h('div', { class: 'dot' }), h('div', { class: 't' }, s[1]), h('div', { class: 's' }, done ? 'Selesai' : now ? 'Sekarang' : ''));
+        })));
+      }
+      if (S.orderErr) kids.push(h('p', { class: 'note' }, S.orderErr));
+      kids.push(h('div', { class: 'card struk' },
+        h('div', { class: 'judul' }, h('b', null, 'EA Dimsum'), h('div', { class: 'note' },
+          new Date(o.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Makassar', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' · No. ' + o.queue_no)),
+        h('div', { class: 'dash' }, h('div', { class: 'nama' }, o.customer_name), h('div', { class: 'note' }, detailText(o))),
+        h('div', { class: 'dash lines' }, (o.items || []).map(function (it) {
+          return h('div', { class: 'row' }, h('span', null, it.qty + ' x ' + it.name), h('span', null, rp(it.line_total)));
+        })),
+        h('div', { class: 'dash lines' },
+          h('div', { class: 'row' }, h('span', { class: 'redup' }, 'Subtotal'), h('span', null, rp(o.subtotal))),
+          o.order_type === 'antar' ? h('div', { class: 'row' }, h('span', { class: 'redup' }, 'Ongkir'), h('span', null, rp(o.delivery_fee))) : null,
+          h('div', { class: 'row total' }, h('span', null, 'Total'), h('span', null, rp(o.total)))),
+        h('div', { class: 'dash row' }, h('span', { class: 'redup' }, 'Status bayar'), h('b', null, payText(o))),
+        h('div', { class: 'note center' }, 'Terima kasih sudah memesan di EA Dimsum')));
+      var acts = [
+        h('button', { class: 'btn-ghost', onClick: copyLink }, 'Salin link struk'),
+        h('button', { class: 'btn-ghost', onClick: function () { window.print(); } }, 'Cetak / simpan PDF')
+      ];
+      if (cfg.WA_KASIR) {
+        acts.push(h('a', { class: 'btn-ghost', target: '_blank', rel: 'noopener',
+          href: 'https://wa.me/' + String(cfg.WA_KASIR).replace(/\D/g, '') + '?text=' + encodeURIComponent('Halo EA Dimsum, pesanan ' + o.queue_no + ' atas nama ' + o.customer_name) }, 'Hubungi kasir via WhatsApp'));
+      }
+      kids.push(h('div', { class: 'acts noprint' }, acts));
+    }
+    return h('div', { class: 'wrap' },
+      h('div', { class: 'top noprint' }, h('h1', null, 'Status pesanan')),
+      h('div', { class: 'body' }, kids),
+      h('div', { class: 'bar noprint' }, h('button', { class: 'btn solo', onClick: reset }, 'Pesan lagi')));
+  }
+
+  // ---------- render ----------
+  function render() {
+    var y = window.scrollY;
+    while (root.firstChild) root.removeChild(root.firstChild);
+    root.appendChild(S.view === 'menu' ? viewMenu() : S.view === 'cart' ? viewCart() : viewStatus());
+    window.scrollTo(0, y);
+  }
+
+  // ---------- mulai ----------
+  var param = null;
+  try { param = new URLSearchParams(location.search).get('o'); } catch (e) {}
+  if (param) { S.token = param; S.view = 'status'; render(); fetchOrder(); startPoll(); }
+  else { render(); }
+  loadMenu();
+})();
+</script>
+</body>
+</html>
