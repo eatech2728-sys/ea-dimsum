@@ -253,6 +253,7 @@
 
   // ---------- kirim pesanan ----------
   function friendly(msg) {
+    if (/Could not find the function|schema cache|does not exist/i.test(msg || '')) return 'Pesanan belum bisa dikirim karena pembaruan sistem belum selesai dipasang. Silakan hubungi kasir lewat WhatsApp.';
     return /^(Stok|Menu|Nama|Pesanan|Alamat|Nomor|Jumlah|Terlalu|Topping)/.test(msg || '')
       ? msg : 'Pesanan belum terkirim. Periksa sambungan internet lalu coba lagi.';
   }
@@ -266,7 +267,7 @@
     if (!name) { S.msg = 'Nama wajib diisi.'; return render(); }
     if (S.type === 'makan' && !S.table.trim()) { S.msg = 'Nomor meja wajib diisi.'; return render(); }
     if (S.type === 'antar' && S.addr.trim().length < 5) { S.msg = 'Alamat pengantaran wajib diisi.'; return render(); }
-    S.busy = true; S.msg = ''; render();
+    S.busy = true; S.msg = ''; S.detail = ''; render();
     var r;
     try {
       var args = {
@@ -284,7 +285,10 @@
     } catch (e) { r = { error: { message: 'jaringan' } }; }
     S.busy = false;
     if (r.error || !r.data || !r.data.token) {
-      S.msg = friendly(r.error && r.error.message);
+      var raw = (r.error && r.error.message) || '';
+      S.msg = friendly(raw);
+      S.detail = (raw && S.msg.indexOf(raw) < 0) ? raw.slice(0, 200) : '';
+      try { console.error('Gagal mengirim pesanan:', r.error); } catch (e) {}
       render();
       loadMenu();
       return;
@@ -485,6 +489,7 @@
         h('div', { class: 'box note' }, payNote)),
       h('div', { class: 'bar' },
         S.msg ? h('div', { class: 'err', role: 'alert' }, S.msg) : null,
+        (S.msg && S.detail) ? h('div', { class: 'ket', style: 'word-break:break-word' }, 'Detail teknis: ' + S.detail) : null,
         h('div', { class: 'row total' }, h('span', null, 'Subtotal'), h('span', null, rp(cartSub()))),
         h('button', { class: 'btn solo', disabled: S.busy, onClick: submit }, S.busy ? 'Mengirim...' : (S.type === 'antar' ? 'Ajukan pesanan antar' : 'Kirim pesanan'))));
   }
