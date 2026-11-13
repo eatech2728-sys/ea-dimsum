@@ -158,7 +158,7 @@
 
   var K = {
     ready: false, profile: null, tab: 'pesanan', filter: 'aktif',
-    orders: [], stock: [], menu: [], cats: [], rep: null,
+    orders: [], stock: [], menu: [], cats: [], tops: [], topsErr: false, newTop: '', rep: null,
     fee: {}, disc: {}, stockIn: {}, menuEdit: {}, newMenu: { cat: '', newCat: '', name: '', price: '', desc: '' },
     email: '', pass: '', loginErr: '', busy: false, err: '', info: '', dirty: false
   };
@@ -288,11 +288,15 @@
   async function loadMenu() {
     var a, b;
     try {
-      a = await db.from('menu_items').select('id,category_id,name,description,price,is_available,stock_qty,image_url,menu_categories(name)');
+      a = await db.from('menu_items').select('id,category_id,name,description,price,is_available,stock_qty,image_url,allow_topping,menu_categories(name)');
       b = await db.from('menu_categories').select('id,name,sort_order').order('sort_order');
     } catch (e) { a = { error: e }; b = {}; }
     if (a.error || b.error) K.err = cleanErr(a.error || b.error);
     else { K.menu = a.data || []; K.cats = b.data || []; }
+    try {
+      var c = await db.from('toppings').select('id,name,is_active,sort_order').order('sort_order');
+      if (c.error) K.topsErr = true; else { K.tops = c.data || []; K.topsErr = false; }
+    } catch (e) { K.topsErr = true; }
     safeRender();
   }
   async function loadReport() {
@@ -468,6 +472,26 @@
       if (!r.error && old) { try { await db.storage.from('menu-foto').remove([old]); } catch (e) {} }
       return r;
     }, async function () { if (!K.err) K.info = 'Foto ' + m.name + ' dihapus.'; await loadMenu(); });
+  }
+  function addTopping() {
+    var name = K.newTop.trim();
+    if (!name) { K.err = 'Nama topping wajib diisi.'; return render(); }
+    var max = K.tops.reduce(function (a, t) { return Math.max(a, t.sort_order || 0); }, 0);
+    run(function () { return db.from('toppings').insert({ name: name, sort_order: max + 1 }); },
+      async function () { if (!K.err) { K.newTop = ''; K.info = 'Topping ' + name + ' ditambahkan.'; } await loadMenu(); });
+  }
+  function toggleTopping(t) {
+    run(function () { return db.from('toppings').update({ is_active: !t.is_active }).eq('id', t.id); },
+      async function () { await loadMenu(); });
+  }
+  function deleteTopping(t) {
+    if (!confirm('Hapus topping ' + t.name + '? Pesanan lama tidak terpengaruh.')) return;
+    run(function () { return db.from('toppings').delete().eq('id', t.id); },
+      async function () { if (!K.err) K.info = 'Topping ' + t.name + ' dihapus.'; await loadMenu(); });
+  }
+  function toggleAllow(m) {
+    run(function () { return db.from('menu_items').update({ allow_topping: !m.allow_topping }).eq('id', m.id); },
+      async function () { await loadMenu(); });
   }
   function addMenu() {
     var f = K.newMenu, price = parseInt(f.price, 10);
@@ -713,6 +737,22 @@
           n === 0 ? h('button', { class: 'b-del', disabled: K.busy, 'aria-label': 'Hapus kategori ' + c.name, onClick: function () { deleteCat(c); } }, 'Hapus')
                   : h('span', { class: 'small redup' }, 'Kosongkan dulu untuk menghapus'));
       })) : h('p', { class: 'redup' }, 'Belum ada kategori.'),
+      h('h2', null, 'Topping'),
+      K.topsErr ? h('p', { class: 'redup' }, 'Topping belum aktif. Jalankan file ea-dimsum-topping.sql di Supabase terlebih dahulu.')
+      : h('div', { class: 'card lines' },
+          K.tops.length ? K.tops.map(function (t) {
+            return h('div', { class: 'row' },
+              h('span', null, h('b', null, t.name), h('span', { class: 'redup' }, t.is_active ? ' · tampil ke pelanggan' : ' · disembunyikan')),
+              h('span', { class: 'btns' },
+                h('button', { class: 'b-out', disabled: K.busy, 'aria-label': (t.is_active ? 'Sembunyikan ' : 'Tampilkan ') + t.name, onClick: function () { toggleTopping(t); } }, t.is_active ? 'Sembunyikan' : 'Tampilkan'),
+                h('button', { class: 'b-del', disabled: K.busy, 'aria-label': 'Hapus topping ' + t.name, onClick: function () { deleteTopping(t); } }, 'Hapus')));
+          }) : h('p', { class: 'redup' }, 'Belum ada topping.'),
+          h('div', { class: 'dash' },
+            h('label', { class: 'lbl', for: 'nt-name' }, 'Tambah topping baru'),
+            h('div', { class: 'sctl' },
+              h('input', { type: 'text', id: 'nt-name', style: 'flex:1;min-width:160px;width:auto', maxlength: '40', placeholder: 'Contoh: Keju', value: K.newTop, onInput: function (e) { K.newTop = e.target.value; } }),
+              h('button', { class: 'b-main', disabled: K.busy, onClick: addTopping }, 'Tambah topping'))),
+          h('div', { class: 'small redup' }, 'Topping gratis. Pelanggan boleh memilih lebih dari satu atau tidak sama sekali.')),
       h('h2', null, 'Daftar menu'),
       K.menu.length ? h('div', { class: 'sgrid' }, K.menu.map(function (m) {
         var e = K.menuEdit[m.id] || {};
@@ -727,6 +767,9 @@
                   h('input', { type: 'file', accept: 'image/*', class: 'file', id: 'ph-' + m.id, 'aria-label': 'Foto ' + m.name,
                     onChange: function (ev) { uploadPhoto(m, ev.target.files && ev.target.files[0]); } })),
                 m.image_url ? h('button', { class: 'b-del', disabled: K.busy, onClick: function () { removePhoto(m); } }, 'Hapus foto') : null))),
+          K.topsErr ? null : h('label', { class: 'small', style: 'display:flex;align-items:center;gap:8px;min-height:44px' },
+            h('input', { type: 'checkbox', checked: m.allow_topping ? true : false, disabled: K.busy, id: 'tp-' + m.id, onChange: function () { toggleAllow(m); } }),
+            'Boleh diberi topping'),
           h('div', { class: 'two' },
             h('div', null, h('label', { class: 'lbl', for: 'p-' + m.id }, 'Harga (Rp)'),
               h('input', { type: 'number', min: '0', inputmode: 'numeric', id: 'p-' + m.id, value: e.price !== undefined ? e.price : m.price, onInput: function (ev) { (K.menuEdit[m.id] = K.menuEdit[m.id] || {}).price = ev.target.value; } })),
