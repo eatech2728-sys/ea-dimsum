@@ -93,6 +93,8 @@
   .cline { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
   .cl-main { min-width: 0; }
   .cl-ctl { display: flex; align-items: center; gap: 10px; flex: none; }
+  .chip.off { opacity: .55; text-decoration: line-through; background: #F1E6D8; cursor: not-allowed; }
+  .chip.off small { text-decoration: none; display: inline-block; font-weight: 700; color: var(--merah); }
   .qbtn.sm { width: 40px; height: 40px; font-size: 18px; }
   .sheet-bg { position: fixed; inset: 0; background: rgba(43,27,16,.55); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
   .sheet { background: #fff; width: 100%; max-width: 520px; border-radius: 22px 22px 0 0; padding: 20px 20px calc(16px + env(safe-area-inset-bottom)); max-height: 92vh; overflow-y: auto; }
@@ -180,6 +182,7 @@
     { auth: { persistSession: false, autoRefreshToken: false } });
 
   // ---------- data tetap ----------
+  var BANK = cfg.BANK_INFO || 'Bank Pembangunan Daerah Sultra 22802010020061 a.n. WA ODE ERNI';
   var WA = String(cfg.WA_KASIR || '082282288380').replace(/\D/g, '').replace(/^0/, '62');
   var TYPES = [['bungkus', 'Bungkus'], ['makan', 'Makan di tempat'], ['antar', 'Antar']];
   var TIMES = ['Sekarang', '15 menit lagi', '30 menit lagi'];
@@ -188,7 +191,7 @@
 
   var S = {
     view: 'menu', menu: [], toppings: [], sheet: null, loading: true, loadErr: '', cat: null, lines: [],
-    type: 'bungkus', time: 'Sekarang', table: '', addr: '',
+    type: 'bungkus', payLater: false, time: 'Sekarang', table: '', addr: '',
     name: getStore('ea_name') || '', phone: getStore('ea_phone') || '',
     busy: false, msg: '', token: null, order: null, orderErr: ''
   };
@@ -243,7 +246,7 @@
       }
       var tr;
       try { tr = await db.from('public_toppings').select('*'); } catch (e) { tr = { error: e }; }
-      S.toppings = (tr && !tr.error && tr.data) ? tr.data.map(function (x) { return x.name; }) : [];
+      S.toppings = (tr && !tr.error && tr.data) ? tr.data.map(function (x) { return { name: x.name, ok: x.is_available !== false }; }) : [];
     }
     S.loading = false; render();
   }
@@ -257,7 +260,8 @@
     if (S.busy) return;
     var name = S.name.trim();
     var lines = cartLines(), withTop = lines.some(function (l) { return l.tops.length; });
-    var items = lines.map(function (l) { return withTop ? { menu_item_id: l.id, qty: l.qty, toppings: l.tops } : { menu_item_id: l.id, qty: l.qty }; });
+    var wrap = withTop || S.payLater;
+    var items = lines.map(function (l) { return wrap ? { menu_item_id: l.id, qty: l.qty, toppings: l.tops } : { menu_item_id: l.id, qty: l.qty }; });
     if (!items.length) { S.msg = 'Keranjang masih kosong.'; return render(); }
     if (!name) { S.msg = 'Nama wajib diisi.'; return render(); }
     if (S.type === 'makan' && !S.table.trim()) { S.msg = 'Nomor meja wajib diisi.'; return render(); }
@@ -265,7 +269,7 @@
     S.busy = true; S.msg = ''; render();
     var r;
     try {
-      r = await db.rpc(withTop ? 'create_order_topping' : 'create_order', {
+      var args = {
         p_name: name,
         p_phone: S.phone.trim() || null,
         p_type: S.type,
@@ -274,7 +278,9 @@
         p_table_no: S.type === 'makan' ? S.table.trim() : null,
         p_address: S.type === 'antar' ? S.addr.trim() : null,
         p_pay: 'kasir'
-      });
+      };
+      if (S.payLater) args.p_paylater = true;
+      r = await db.rpc(wrap ? 'create_order_topping' : 'create_order', args);
     } catch (e) { r = { error: { message: 'jaringan' } }; }
     S.busy = false;
     if (r.error || !r.data || !r.data.token) {
@@ -285,7 +291,7 @@
     }
     setStore('ea_name', name); setStore('ea_phone', S.phone.trim());
     setStore('ea_last', r.data.token);
-    S.token = r.data.token; S.order = null; S.orderErr = ''; S.lines = [];
+    S.token = r.data.token; S.order = null; S.orderErr = ''; S.lines = []; S.payLater = false;
     try { history.replaceState(null, '', '?o=' + S.token); } catch (e) {}
     go('status');
     fetchOrder(); startPoll();
@@ -333,7 +339,7 @@
   function menuCard(m) {
     var q = itemQty(m.id), ctrl, canTop = m.allow_topping && S.toppings.length > 0;
     if (!m.is_available) ctrl = h('span', { class: 'habis' }, 'Habis');
-    else if (canTop) ctrl = h('button', { class: 'btn-add', onClick: function () { S.sheet = { id: m.id, tops: [], qty: 1 }; render(); } }, 'Tambah');
+    else if (canTop) ctrl = h('button', { class: 'btn-add', onClick: function () { S.sheet = { id: m.id, tops: [], qty: 1 }; render(); refreshToppings(); } }, 'Tambah');
     else if (q === 0) ctrl = h('button', { class: 'btn-add', onClick: function () { addLine(m.id, [], 1); } }, 'Tambah');
     else ctrl = h('div', { class: 'qty' },
       h('button', { class: 'qbtn', 'aria-label': 'Kurangi ' + m.name, onClick: function () { addLine(m.id, [], -1); } }, '−'),
@@ -352,13 +358,22 @@
       h('div', { class: 'ctl' }, ctrl));
   }
 
+  // saat lembar topping dibuka, ambil status ready/habis terbaru
+  async function refreshToppings() {
+    var r;
+    try { r = await db.from('public_toppings').select('*'); } catch (e) { return; }
+    if (!r || r.error || !r.data) return;
+    S.toppings = r.data.map(function (x) { return { name: x.name, ok: x.is_available !== false }; });
+    if (S.sheet) S.sheet.tops = S.sheet.tops.filter(function (n) { return S.toppings.some(function (t) { return t.name === n && t.ok; }); });
+    render();
+  }
   function sheetView() {
     var sh = S.sheet, m = menuById(sh.id);
     if (!m) return null;
     function toggle(t) {
       var i = sh.tops.indexOf(t);
       if (i >= 0) sh.tops.splice(i, 1); else sh.tops.push(t);
-      sh.tops = S.toppings.filter(function (x) { return sh.tops.indexOf(x) >= 0; });
+      sh.tops = S.toppings.map(function (x) { return x.name; }).filter(function (x) { return sh.tops.indexOf(x) >= 0; });
       render();
     }
     return h('div', { class: 'sheet-bg', onClick: function (e) { if (e.target === e.currentTarget) { S.sheet = null; render(); } } },
@@ -366,8 +381,9 @@
         h('h2', null, m.name),
         h('p', { class: 'note', style: 'margin:0 0 10px' }, 'Topping gratis. Boleh pilih lebih dari satu, atau tidak pakai topping.'),
         h('div', { class: 'seg' }, S.toppings.map(function (t) {
-          var on = sh.tops.indexOf(t) >= 0;
-          return h('button', { class: 'chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', onClick: function () { toggle(t); } }, t);
+          var on = sh.tops.indexOf(t.name) >= 0;
+          if (!t.ok) return h('button', { class: 'chip off', disabled: true, 'aria-label': t.name + ', habis' }, t.name, h('small', null, ' · habis'));
+          return h('button', { class: 'chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', onClick: function () { toggle(t.name); } }, t.name);
         })),
         h('div', { class: 'row', style: 'align-items:center;margin:16px 0 12px' },
           h('span', { class: 'lbl', style: 'margin:0' }, 'Jumlah cup'),
@@ -444,9 +460,11 @@
     } else {
       extra = h('div', null, h('label', { class: 'lbl', for: 'f-alamat' }, 'Alamat pengantaran'),
         h('input', { type: 'text', id: 'f-alamat', value: S.addr, maxlength: '300', placeholder: 'Jalan, nomor, patokan', autocomplete: 'street-address', onInput: function (e) { S.addr = e.target.value; } }),
-        h('p', { class: 'note' }, 'Pesanan antar diperiksa admin dulu. Ongkir ditentukan admin setelah pesanan disetujui, lalu Anda bisa membayar.'));
+        h('p', { class: 'note' }, 'Pesanan antar diperiksa admin dulu. Ongkir ditentukan admin setelah pesanan disetujui' + (S.payLater ? '.' : ', lalu Anda bisa membayar.')));
     }
-    var payNote = S.type === 'antar'
+    var payNote = S.payLater
+      ? (S.type === 'antar' ? 'Pesanan antar diperiksa admin dulu. Setelah disetujui, pesanan langsung diproses dan Anda membayar tunai saat pesanan sampai (COD).' : S.type === 'makan' ? 'Pesanan langsung diproses. Bayar tunai di kasir.' : 'Pesanan langsung diproses. Bayar tunai saat pesanan diambil.')
+      : S.type === 'antar'
       ? 'Pembayaran dilakukan setelah pesanan disetujui admin.'
       : 'Bayar lewat QRIS atau transfer: setelah memesan, kirim konfirmasi pembayaran lewat WhatsApp. Bisa juga bayar tunai di kasir. Pesanan diproses setelah pembayaran dikonfirmasi.';
     return h('div', { class: 'wrap' },
@@ -456,6 +474,10 @@
         h('div', null, h('span', { class: 'lbl' }, 'Jenis pesanan'),
           h('div', { class: 'seg' }, TYPES.map(function (t) { return chip(t[1], S.type === t[0], function () { S.type = t[0]; S.msg = ''; render(); }); }))),
         extra,
+        h('div', null, h('span', { class: 'lbl' }, 'Pembayaran'),
+          h('div', { class: 'seg' },
+            chip('Transfer / QRIS', !S.payLater, function () { S.payLater = false; render(); }),
+            chip(S.type === 'antar' ? 'Tunai saat diantar (COD)' : S.type === 'makan' ? 'Tunai di kasir' : 'Tunai saat ambil', S.payLater, function () { S.payLater = true; render(); }))),
         h('div', null, h('label', { class: 'lbl', for: 'f-nama' }, 'Atas nama'),
           h('input', { type: 'text', id: 'f-nama', value: S.name, maxlength: '60', placeholder: 'Nama Anda', autocomplete: 'name', onInput: function (e) { S.name = e.target.value; } })),
         h('div', null, h('label', { class: 'lbl', for: 'f-hp' }, 'Nomor WhatsApp (opsional)'),
@@ -475,6 +497,7 @@
     return 'Antar ke: ' + (o.delivery_address || '-');
   }
   function stepsFor(o) {
+    if (o.order_type === 'antar' && o.pay_later) return [['menunggu_persetujuan', 'Menunggu persetujuan admin'], ['baru', 'Pesanan diterima'], ['diproses', 'Sedang diproses'], ['siap', 'Siap diantar'], ['selesai', 'Selesai']];
     if (o.order_type === 'antar') return [['menunggu_persetujuan', 'Menunggu persetujuan admin'], ['menunggu_pembayaran', 'Menunggu pembayaran'], ['baru', 'Pesanan diterima'], ['diproses', 'Sedang diproses'], ['siap', 'Siap diantar'], ['selesai', 'Selesai']];
     return [['baru', 'Pesanan diterima'], ['diproses', 'Sedang diproses'], ['siap', o.order_type === 'makan' ? 'Siap disajikan' : 'Siap diambil'], ['selesai', 'Selesai']];
   }
@@ -482,7 +505,9 @@
     var m = {
       menunggu_persetujuan: ['info', 'Pesanan antar Anda sedang diperiksa admin. Ongkir ditentukan setelah pesanan disetujui.'],
       menunggu_pembayaran: ['info', 'Pesanan disetujui. Total sudah termasuk ongkir ' + rp(o.delivery_fee) + '. Silakan bayar ke kasir; pesanan masuk dapur setelah pembayaran dikonfirmasi.'],
-      baru: ['info', o.payment_status === 'lunas' ? 'Pesanan diterima dan masuk antrean dapur.' : 'Pesanan diterima. Pesanan mulai diproses setelah pembayaran dikonfirmasi kasir.'],
+      baru: ['info', o.payment_status === 'lunas' ? 'Pesanan diterima dan masuk antrean dapur.'
+        : o.pay_later ? 'Pesanan diterima dan masuk antrean dapur. Bayar tunai saat ' + (o.order_type === 'antar' ? 'pesanan diantar.' : o.order_type === 'makan' ? 'selesai makan.' : 'pesanan diambil.')
+        : 'Pesanan diterima. Pesanan mulai diproses setelah pembayaran dikonfirmasi kasir.'],
       diproses: ['info', 'Pesanan sedang disiapkan.'],
       siap: ['good', o.order_type === 'bungkus' ? 'Pesanan siap diambil. Tunjukkan nomor antrean ke kasir.' : o.order_type === 'makan' ? 'Pesanan siap disajikan.' : 'Pesanan siap diantar.'],
       selesai: ['good', 'Pesanan selesai. Terima kasih sudah memesan di EA Dimsum!'],
@@ -494,6 +519,7 @@
   function payText(o) {
     if (o.payment_status === 'lunas') return 'Lunas';
     if (o.order_type === 'antar' && o.status === 'menunggu_persetujuan') return 'Belum bisa dibayar';
+    if (o.pay_later) return o.order_type === 'antar' ? 'Belum lunas (bayar tunai/COD)' : 'Belum lunas (bayar tunai)';
     return 'Belum lunas';
   }
 
@@ -521,15 +547,28 @@
       }
       if (S.orderErr) kids.push(h('p', { class: 'note' }, S.orderErr));
       if (!stopped && o.payment_status !== 'lunas' && !(o.order_type === 'antar' && o.status === 'menunggu_persetujuan')) {
+        if (o.pay_later) {
+          kids.push(h('div', { class: 'card payb noprint' },
+            h('b', null, 'Pembayaran tunai'),
+            h('p', { class: 'note', style: 'margin:0' }, 'Siapkan ' + rp(o.total) + (o.order_type === 'antar' ? ' untuk dibayar tunai kepada kurir saat pesanan sampai (COD).' : o.order_type === 'makan' ? ' untuk dibayar tunai di kasir.' : ' untuk dibayar tunai ke kasir saat pesanan diambil.')),
+            h('p', { class: 'note', style: 'margin:0' }, 'Pesanan Anda tetap diproses tanpa menunggu pembayaran.')));
+        } else {
         var waMsg = 'Halo EA Dimsum, saya konfirmasi pembayaran pesanan ' + o.queue_no + ' atas nama ' + o.customer_name + ', total ' + rp(o.total) + '. Link pesanan: ' + location.origin + location.pathname + '?o=' + S.token;
         kids.push(h('div', { class: 'card payb noprint' },
           h('b', null, 'Cara membayar'),
           cfg.QRIS_IMG ? h('img', { class: 'qris', src: cfg.QRIS_IMG, alt: 'QRIS EA Dimsum' }) : null,
-          cfg.BANK_INFO ? h('div', { class: 'box' }, cfg.BANK_INFO) : null,
-          h('p', { class: 'note', style: 'margin:0' }, (cfg.QRIS_IMG || cfg.BANK_INFO)
+          BANK ? h('div', { class: 'box' }, h('div', { class: 'ket' }, 'Transfer ke rekening'), h('div', { class: 'nama' }, BANK)) : null,
+          (BANK && /\d{8,}/.test(BANK)) ? h('button', { class: 'btn-ghost', onClick: function (ev) {
+            var btn = ev.currentTarget, no = BANK.match(/\d{8,}/)[0];
+            function done() { var t = btn.textContent; btn.textContent = 'Nomor tersalin'; setTimeout(function () { btn.textContent = t; }, 1800); }
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(no).then(done, function () { window.prompt('Salin nomor rekening:', no); });
+            else window.prompt('Salin nomor rekening:', no);
+          } }, 'Salin nomor rekening') : null,
+          h('p', { class: 'note', style: 'margin:0' }, (cfg.QRIS_IMG || BANK)
             ? 'Bayar sesuai total ' + rp(o.total) + ', lalu kirim bukti pembayaran lewat WhatsApp. Pesanan diproses setelah kasir mengonfirmasi.'
             : 'Bayar tunai di kasir, atau chat kasir lewat WhatsApp untuk meminta info QRIS/transfer. Pesanan diproses setelah pembayaran dikonfirmasi kasir.'),
           h('a', { class: 'btn-ghost', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + WA + '?text=' + encodeURIComponent(waMsg) }, 'Konfirmasi pembayaran via WhatsApp')));
+        }
       }
       kids.push(h('div', { class: 'card struk' },
         h('div', { class: 'judul' }, h('b', null, 'EA Dimsum'), h('div', { class: 'note' },
