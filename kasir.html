@@ -75,6 +75,19 @@
   .sctl input { width: 110px; }
   .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
   h2 { font-size: 16px; margin: 18px 0 8px; font-weight: 800; }
+  .pos { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+  .pcart { gap: 12px; }
+  .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .pbtn { position: relative; min-height: 96px; padding: 12px; border-radius: 16px; border: 1.5px solid #DCCDBB; background: #fff; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 2px; text-align: left; color: var(--teks); overflow: hidden; }
+  .pbtn b { font-size: 15px; } .pbtn span { color: var(--kayu); font-weight: 800; }
+  .pbtn img { width: 100%; height: 70px; object-fit: cover; border-radius: 10px; margin-bottom: 6px; }
+  .pbtn i { position: absolute; top: 8px; right: 8px; background: var(--kayu); color: #fff; font-style: normal; font-weight: 800; min-width: 26px; height: 26px; border-radius: 13px; display: flex; align-items: center; justify-content: center; padding: 0 6px; }
+  .pbtn.off { opacity: .5; }
+  .pbtn:active { transform: scale(.98); }
+  .sheet-bg { position: fixed; inset: 0; background: rgba(43,27,16,.55); z-index: 30; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .sheet { background: #fff; width: 100%; max-width: 480px; border-radius: 20px; padding: 20px; max-height: 92vh; overflow-y: auto; }
+  .chip.off { opacity: .55; text-decoration: line-through; cursor: not-allowed; }
+  @media (min-width: 900px) { .pos { grid-template-columns: minmax(0, 1fr) 400px; } .pcart { position: sticky; top: 84px; } }
   .tgls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .tgl { min-height: 48px; padding: 0 14px; border-radius: 14px; border: 1.5px solid; display: inline-flex; align-items: center; gap: 10px; font-weight: 600; background: #fff; }
   .tgl b { font-size: 12px; padding: 2px 8px; border-radius: 10px; }
@@ -168,6 +181,7 @@
     ready: false, profile: null, tab: 'pesanan', filter: 'aktif',
     orders: [], stock: [], menu: [], cats: [], tops: [], topsErr: false, newTop: '', rep: null,
     fee: {}, disc: {}, stockIn: {}, menuEdit: {}, newMenu: { cat: '', newCat: '', name: '', price: '', desc: '' },
+    pos: { loaded: false, menu: [], tops: [], lines: [], sheet: null, cat: null, type: 'bungkus', pay: 'Tunai', name: '', table: '', done: true, disc: '', note: '', last: null },
     email: '', pass: '', loginErr: '', busy: false, err: '', info: '', dirty: false
   };
   var chan = null, pollT = null, reloadT = null, ac = null;
@@ -341,8 +355,129 @@
     K.tab = t; K.err = ''; K.info = ''; render();
     if (t === 'pesanan') loadOrders(true);
     if (t === 'stok') loadStock();
+    if (t === 'jual') posLoad();
     if (t === 'menu') loadMenu();
     if (t === 'laporan') loadReport();
+  }
+
+  // ---------- jual langsung (pembeli yang datang dan membeli di tempat) ----------
+  async function posLoad() {
+    var a, f, t;
+    try {
+      a = await db.from('public_menu').select('*');
+      f = await db.from('public_menu_foto').select('*');
+      t = await db.from('public_toppings').select('*');
+    } catch (e) { a = { error: e }; }
+    if (!a || a.error) { K.err = cleanErr(a && a.error); return safeRender(); }
+    var P = K.pos, map = {};
+    ((f && f.data) || []).forEach(function (x) { map[x.id] = x; });
+    P.menu = (a.data || []).map(function (m) { m.allow_topping = !!(map[m.id] && map[m.id].allow_topping); return m; });
+    P.tops = ((t && !t.error && t.data) || []).map(function (x) { return { name: x.name, ok: x.is_available !== false }; });
+    var cats = []; P.menu.forEach(function (m) { if (cats.indexOf(m.category) < 0) cats.push(m.category); });
+    if (!P.cat || cats.indexOf(P.cat) < 0) P.cat = cats[0] || null;
+    P.loaded = true; safeRender();
+  }
+  function posMenu(id) { return K.pos.menu.filter(function (m) { return m.id === id; })[0]; }
+  function posLines() { return K.pos.lines.filter(function (l) { var m = posMenu(l.id); return m && m.is_available; }); }
+  function posSub() { return posLines().reduce(function (a, l) { return a + l.qty * posMenu(l.id).price; }, 0); }
+  function posCount() { return posLines().reduce(function (a, l) { return a + l.qty; }, 0); }
+  function posAdd(id, tops, n) {
+    var P = K.pos, k = id + '|' + tops.join(','), l = P.lines.filter(function (x) { return x.key === k; })[0];
+    if (!l) { l = { key: k, id: id, tops: tops, qty: 0 }; P.lines.push(l); }
+    l.qty = Math.max(0, Math.min(99, l.qty + n));
+    if (l.qty === 0) P.lines = P.lines.filter(function (x) { return x !== l; });
+    render();
+  }
+  function posSubmit() {
+    var P = K.pos, lines = posLines();
+    if (!lines.length) { K.err = 'Pilih menu dulu.'; return render(); }
+    var disc = parseInt(P.disc, 10) || 0;
+    if (disc < 0) { K.err = 'Diskon tidak valid.'; return render(); }
+    if (disc > posSub()) { K.err = 'Diskon tidak boleh melebihi subtotal.'; return render(); }
+    if (disc > 0 && !P.note.trim()) { K.err = 'Alasan diskon wajib diisi.'; return render(); }
+    var total = posSub() - disc;
+    run(async function () {
+      var r = await db.rpc('create_order_kasir', {
+        p_items: lines.map(function (l) { return { menu_item_id: l.id, qty: l.qty, toppings: l.tops }; }),
+        p_pay: P.pay, p_name: P.name.trim() || null, p_type: P.type,
+        p_table: P.type === 'makan' ? (P.table.trim() || null) : null,
+        p_discount: disc, p_discount_note: disc > 0 ? P.note.trim() : null, p_done: P.done
+      });
+      if (!r.error && r.data) {
+        P.last = { queue_no: r.data.queue_no, total: r.data.total !== undefined ? r.data.total : total, token: r.data.token };
+        P.lines = []; P.name = ''; P.table = ''; P.disc = ''; P.note = ''; P.pay = 'Tunai'; P.type = 'bungkus'; P.done = true;
+      }
+      return r;
+    }, async function () { if (!K.err) K.info = 'Transaksi tercatat.'; await Promise.all([posLoad(), loadOrders(true)]); });
+  }
+  function posSheet() {
+    var sh = K.pos.sheet, m = posMenu(sh.id);
+    if (!m) return null;
+    function toggle(t) {
+      var i = sh.tops.indexOf(t); if (i >= 0) sh.tops.splice(i, 1); else sh.tops.push(t);
+      sh.tops = K.pos.tops.map(function (x) { return x.name; }).filter(function (x) { return sh.tops.indexOf(x) >= 0; }); render();
+    }
+    return h('div', { class: 'sheet-bg', onClick: function (e) { if (e.target === e.currentTarget) { K.pos.sheet = null; render(); } } },
+      h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Topping ' + m.name },
+        h('h2', { style: 'margin:0 0 4px' }, m.name),
+        h('p', { class: 'small redup', style: 'margin:0 0 10px' }, 'Topping gratis, boleh lebih dari satu atau tanpa topping.'),
+        h('div', { class: 'btns' }, K.pos.tops.map(function (t) {
+          var on = sh.tops.indexOf(t.name) >= 0;
+          if (!t.ok) return h('button', { class: 'chip off', disabled: true, 'aria-label': t.name + ', habis' }, t.name + ' · habis');
+          return h('button', { class: 'chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', onClick: function () { toggle(t.name); } }, t.name);
+        })),
+        h('div', { class: 'row', style: 'margin:14px 0' }, h('b', null, 'Jumlah cup'),
+          h('div', { class: 'btns' },
+            h('button', { class: 'b-out', 'aria-label': 'Kurangi jumlah', onClick: function () { sh.qty = Math.max(1, sh.qty - 1); render(); } }, '−'),
+            h('b', { style: 'min-width:28px;text-align:center;align-self:center' }, sh.qty),
+            h('button', { class: 'b-out', 'aria-label': 'Tambah jumlah', onClick: function () { sh.qty = Math.min(99, sh.qty + 1); render(); } }, '+'))),
+        h('div', { class: 'btns' },
+          h('button', { class: 'b-main', onClick: function () { var t = sh.tops.slice(), n = sh.qty, id = m.id; K.pos.sheet = null; posAdd(id, t, n); } }, 'Tambah · ' + rp(sh.qty * m.price)),
+          h('button', { class: 'b-out', onClick: function () { K.pos.sheet = null; render(); } }, 'Batal'))));
+  }
+  function viewPos() {
+    var P = K.pos;
+    if (!P.loaded) return h('p', { class: 'empty' }, 'Memuat menu...');
+    var cats = []; P.menu.forEach(function (m) { if (cats.indexOf(m.category) < 0) cats.push(m.category); });
+    var items = P.menu.filter(function (m) { return m.category === P.cat; });
+    var disc = Math.max(0, parseInt(P.disc, 10) || 0), sub = posSub(), total = Math.max(0, sub - disc), n = posCount();
+    function seg(list, cur, fn) { return h('div', { class: 'btns' }, list.map(function (x) { return h('button', { class: 'chip' + (cur === x[0] ? ' on' : ''), onClick: function () { fn(x[0]); } }, x[1]); })); }
+    return h('div', { class: 'pos' },
+      h('div', null,
+        h('div', { class: 'chips' }, cats.map(function (c) { return h('button', { class: 'chip' + (P.cat === c ? ' on' : ''), onClick: function () { P.cat = c; render(); } }, c); })),
+        h('div', { class: 'pgrid' }, items.map(function (m) {
+          var canTop = m.allow_topping && P.tops.length > 0, q = P.lines.reduce(function (a, l) { return a + (l.id === m.id ? l.qty : 0); }, 0);
+          return h('button', { class: 'pbtn' + (m.is_available ? '' : ' off'), disabled: !m.is_available, 'aria-label': 'Tambah ' + m.name,
+            onClick: function () { if (canTop) { P.sheet = { id: m.id, tops: [], qty: 1 }; render(); } else posAdd(m.id, [], 1); } },
+            m.image_url ? h('img', { src: m.image_url, alt: '' }) : null,
+            h('b', null, m.name), h('span', null, m.is_available ? rp(m.price) : 'Habis'),
+            q > 0 ? h('i', null, q) : null);
+        }))),
+      h('div', { class: 'card pcart' },
+        h('b', { style: 'font-size:16px' }, 'Transaksi langsung'),
+        P.last ? h('div', { class: 'alert good', role: 'status', style: 'margin:0' }, 'Tercatat: ' + P.last.queue_no + ' · ' + rp(P.last.total) + ' ',
+          h('a', { href: 'index.html?o=' + P.last.token, target: '_blank', rel: 'noopener', style: 'color:inherit;font-weight:800' }, 'Lihat struk')) : null,
+        n === 0 ? h('p', { class: 'redup', style: 'margin:0' }, 'Belum ada menu. Ketuk menu di sebelah untuk menambah.')
+        : h('div', { class: 'lines' }, posLines().map(function (l) {
+            var m = posMenu(l.id);
+            return h('div', { class: 'row' },
+              h('div', null, h('div', null, l.qty + ' x ' + m.name), l.tops.length ? h('div', { class: 'small redup' }, 'Topping: ' + l.tops.join(', ')) : null),
+              h('div', { class: 'btns', style: 'align-items:center' }, h('b', null, rp(l.qty * m.price)),
+                h('button', { class: 'b-out', 'aria-label': 'Kurangi ' + m.name + (l.tops.length ? ' ' + l.tops.join(', ') : ''), onClick: function () { posAdd(l.id, l.tops, -1); } }, '−'),
+                h('button', { class: 'b-out', 'aria-label': 'Tambah baris ' + m.name + (l.tops.length ? ' ' + l.tops.join(', ') : ''), onClick: function () { posAdd(l.id, l.tops, 1); } }, '+')));
+          })),
+        h('div', null, h('span', { class: 'lbl' }, 'Bayar dengan'), seg([['Tunai', 'Tunai'], ['QRIS', 'QRIS'], ['Transfer', 'Transfer']], P.pay, function (v) { P.pay = v; render(); })),
+        h('div', null, h('span', { class: 'lbl' }, 'Jenis'), seg([['bungkus', 'Bungkus'], ['makan', 'Makan di tempat']], P.type, function (v) { P.type = v; render(); })),
+        P.type === 'makan' ? h('div', null, h('label', { class: 'lbl', for: 'pos-meja' }, 'Nomor meja'), h('input', { type: 'text', id: 'pos-meja', maxlength: '10', value: P.table, onInput: function (e) { P.table = e.target.value; } })) : null,
+        h('div', null, h('label', { class: 'lbl', for: 'pos-nama' }, 'Nama pembeli (boleh kosong)'), h('input', { type: 'text', id: 'pos-nama', maxlength: '60', placeholder: 'Pembeli langsung', value: P.name, onInput: function (e) { P.name = e.target.value; } })),
+        h('div', { class: 'two' },
+          h('div', null, h('label', { class: 'lbl', for: 'pos-disc' }, 'Diskon (Rp)'), h('input', { type: 'number', min: '0', inputmode: 'numeric', id: 'pos-disc', value: P.disc, placeholder: '0', onInput: function (e) { P.disc = e.target.value; var t = document.getElementById('pos-total'); if (t) t.textContent = rp(Math.max(0, posSub() - (parseInt(e.target.value, 10) || 0))); } })),
+          h('div', null, h('label', { class: 'lbl', for: 'pos-note' }, 'Alasan diskon'), h('input', { type: 'text', id: 'pos-note', maxlength: '100', placeholder: 'Wajib jika ada diskon', value: P.note, onInput: function (e) { P.note = e.target.value; } }))),
+        h('label', { style: 'display:flex;align-items:center;gap:8px;min-height:44px' },
+          h('input', { type: 'checkbox', id: 'pos-done', checked: P.done ? true : false, onChange: function (e) { P.done = e.target.checked; } }), 'Langsung selesai (barang sudah diserahkan)'),
+        h('div', { class: 'row dash total', style: 'font-size:18px' }, h('span', null, 'Total'), h('span', { id: 'pos-total' }, rp(total))),
+        h('button', { class: 'b-main', style: 'min-height:52px;font-size:16px', disabled: K.busy || n === 0, onClick: posSubmit }, 'Catat transaksi · ' + rp(total))),
+      P.sheet ? posSheet() : null);
   }
 
   // aksi pesanan
@@ -547,7 +682,7 @@
   function viewApp() {
     var admin = K.profile.role === 'admin';
     var perlu = K.orders.filter(function (o) { return o.status === 'menunggu_persetujuan' || o.status === 'baru'; }).length;
-    var tabs = [['pesanan', 'Pesanan'], ['stok', 'Stok'], ['laporan', 'Laporan']];
+    var tabs = [['pesanan', 'Pesanan'], ['jual', 'Jual langsung'], ['stok', 'Stok'], ['laporan', 'Laporan']];
     if (admin) { tabs.push(['menu', 'Menu']); tabs.push(['pengaturan', 'Pengaturan']); }
     return h('div', null,
       h('div', { class: 'hdr' }, h('div', { class: 'in' },
@@ -561,7 +696,7 @@
         })),
         K.err ? h('div', { class: 'alert bad', role: 'alert' }, K.err) : null,
         K.info ? h('div', { class: 'alert good', role: 'status' }, K.info) : null,
-        K.tab === 'pesanan' ? viewOrders() : K.tab === 'stok' ? viewStock() : K.tab === 'laporan' ? viewReport() : K.tab === 'pengaturan' ? viewSettings() : viewMenu()));
+        K.tab === 'pesanan' ? viewOrders() : K.tab === 'jual' ? viewPos() : K.tab === 'stok' ? viewStock() : K.tab === 'laporan' ? viewReport() : K.tab === 'pengaturan' ? viewSettings() : viewMenu()));
   }
 
   // ---------- tampilan: pesanan ----------
