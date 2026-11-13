@@ -75,6 +75,14 @@
   .sctl input { width: 110px; }
   .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
   h2 { font-size: 16px; margin: 18px 0 8px; font-weight: 800; }
+  .tgls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .tgl { min-height: 48px; padding: 0 14px; border-radius: 14px; border: 1.5px solid; display: inline-flex; align-items: center; gap: 10px; font-weight: 600; background: #fff; }
+  .tgl b { font-size: 12px; padding: 2px 8px; border-radius: 10px; }
+  .tgl.ready { border-color: #17684D; color: var(--teks); }
+  .tgl.ready b { background: #D5EDE3; color: #0E4F39; }
+  .tgl.habis { border-color: #A32A1F; background: #FBEAE7; color: #7E1A12; }
+  .tgl.habis span { text-decoration: line-through; }
+  .tgl.habis b { background: #A32A1F; color: #fff; }
   .mfoto { width: 84px; height: 84px; flex: none; border-radius: 12px; background: linear-gradient(135deg, #F6EBDC, #E8D3B8); display: flex; align-items: center; justify-content: center; font-size: 34px; overflow: hidden; }
   .mfoto img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .mhead { display: flex; gap: 12px; align-items: center; }
@@ -283,7 +291,14 @@
     var r;
     try { r = await db.from('stock_status').select('*'); } catch (e) { r = { error: e }; }
     if (r.error) K.err = cleanErr(r.error); else K.stock = r.data || [];
+    await loadTops();
     safeRender();
+  }
+  async function loadTops() {
+    try {
+      var c = await db.from('toppings').select('id,name,is_active,is_available,sort_order').order('sort_order');
+      if (c.error) K.topsErr = true; else { K.tops = c.data || []; K.topsErr = false; }
+    } catch (e) { K.topsErr = true; }
   }
   async function loadMenu() {
     var a, b;
@@ -293,10 +308,7 @@
     } catch (e) { a = { error: e }; b = {}; }
     if (a.error || b.error) K.err = cleanErr(a.error || b.error);
     else { K.menu = a.data || []; K.cats = b.data || []; }
-    try {
-      var c = await db.from('toppings').select('id,name,is_active,sort_order').order('sort_order');
-      if (c.error) K.topsErr = true; else { K.tops = c.data || []; K.topsErr = false; }
-    } catch (e) { K.topsErr = true; }
+    await loadTops();
     safeRender();
   }
   async function loadReport() {
@@ -473,6 +485,11 @@
       return r;
     }, async function () { if (!K.err) K.info = 'Foto ' + m.name + ' dihapus.'; await loadMenu(); });
   }
+  function toggleReady(t) {
+    var to = !t.is_available;
+    run(function () { return db.rpc('set_topping_available', { p_id: t.id, p_available: to }); },
+      async function () { if (!K.err) K.info = 'Topping ' + t.name + (to ? ' ditandai ready.' : ' ditandai habis.'); await loadTops(); });
+  }
   function addTopping() {
     var name = K.newTop.trim();
     if (!name) { K.err = 'Nama topping wajib diisi.'; return render(); }
@@ -622,7 +639,7 @@
         o.status === 'menunggu_pembayaran' ? 'Tandai lunas (masuk dapur)' : 'Tandai lunas'));
       var nx = NEXT[o.status];
       if (nx) {
-        var blocked = nx[0] === 'selesai' && !paid;
+        var blocked = (nx[0] === 'diproses' || nx[0] === 'selesai') && !paid;
         row.push(h('button', { class: 'b-main', disabled: K.busy || blocked, title: blocked ? 'Tandai lunas dulu' : null, onClick: function () { setStatus(o, nx[0]); } }, nx[1]));
       }
       row.push(h('button', { class: 'b-del', disabled: K.busy, onClick: function () { cancelOrder(o); } }, 'Batalkan'));
@@ -654,6 +671,15 @@
     var tone = { aman: 'b-ok', menipis: 'b-wait', habis: 'b-bad', 'tidak dilacak': 'b-end' };
     return h('div', null,
       h('p', { class: 'redup' }, 'Isi stok tiap pagi. Stok berkurang otomatis saat ada pesanan, dan menu otomatis "Habis" saat stok 0.'),
+      (K.topsErr || !K.tops.length) ? null : h('div', { class: 'card', style: 'margin-bottom:12px' },
+        h('b', null, 'Topping hari ini'),
+        h('div', { class: 'small redup' }, 'Tekan topping yang habis agar pelanggan tidak bisa memilihnya. Tekan lagi saat sudah ready.'),
+        h('div', { class: 'tgls' }, K.tops.filter(function (t) { return t.is_active; }).map(function (t) {
+          return h('button', { class: 'tgl ' + (t.is_available ? 'ready' : 'habis'), disabled: K.busy,
+            'aria-label': t.name + (t.is_available ? ': ready. Tekan untuk tandai habis' : ': habis. Tekan untuk tandai ready'),
+            onClick: function () { toggleReady(t); } },
+            h('span', null, t.name), h('b', null, t.is_available ? 'Ready' : 'Habis'));
+        }))),
       h('div', { class: 'sgrid' }, K.stock.map(function (s) {
         return h('div', { class: 'card' },
           h('div', { class: 'row' }, h('div', null, h('b', null, s.menu), h('span', { class: 'redup' }, ' · ' + s.kategori)),
@@ -742,7 +768,7 @@
       : h('div', { class: 'card lines' },
           K.tops.length ? K.tops.map(function (t) {
             return h('div', { class: 'row' },
-              h('span', null, h('b', null, t.name), h('span', { class: 'redup' }, t.is_active ? ' · tampil ke pelanggan' : ' · disembunyikan')),
+              h('span', null, h('b', null, t.name), h('span', { class: 'redup' }, (t.is_active ? ' · tampil ke pelanggan' : ' · disembunyikan') + (t.is_available ? '' : ' · HABIS hari ini'))),
               h('span', { class: 'btns' },
                 h('button', { class: 'b-out', disabled: K.busy, 'aria-label': (t.is_active ? 'Sembunyikan ' : 'Tampilkan ') + t.name, onClick: function () { toggleTopping(t); } }, t.is_active ? 'Sembunyikan' : 'Tampilkan'),
                 h('button', { class: 'b-del', disabled: K.busy, 'aria-label': 'Hapus topping ' + t.name, onClick: function () { deleteTopping(t); } }, 'Hapus')));
