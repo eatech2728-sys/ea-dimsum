@@ -98,6 +98,8 @@
   .sheet { background: #fff; width: 100%; max-width: 520px; border-radius: 22px 22px 0 0; padding: 20px 20px calc(16px + env(safe-area-inset-bottom)); max-height: 92vh; overflow-y: auto; }
   .sheet h2 { margin: 0 0 4px; font-size: 20px; font-weight: 800; }
   @media (min-width: 700px) { .sheet-bg { align-items: center; } .sheet { border-radius: 22px; } }
+  .payb { display: flex; flex-direction: column; gap: 10px; }
+  .payb .qris { width: 100%; max-width: 280px; align-self: center; border-radius: 12px; border: 1px solid var(--garis); }
   .sidebox h2 { margin: 0 0 10px; font-size: 17px; font-weight: 800; }
   .sidebox .lines { margin-bottom: 12px; }
   @media (min-width: 700px) {
@@ -178,6 +180,7 @@
     { auth: { persistSession: false, autoRefreshToken: false } });
 
   // ---------- data tetap ----------
+  var WA = String(cfg.WA_KASIR || '082282288380').replace(/\D/g, '').replace(/^0/, '62');
   var TYPES = [['bungkus', 'Bungkus'], ['makan', 'Makan di tempat'], ['antar', 'Antar']];
   var TIMES = ['Sekarang', '15 menit lagi', '30 menit lagi'];
   var FINAL = ['selesai', 'ditolak', 'dibatalkan'];
@@ -445,7 +448,7 @@
     }
     var payNote = S.type === 'antar'
       ? 'Pembayaran dilakukan setelah pesanan disetujui admin.'
-      : 'Pembayaran dilakukan langsung di kasir saat pesanan diambil. Pembayaran QRIS segera hadir.';
+      : 'Bayar lewat QRIS atau transfer: setelah memesan, kirim konfirmasi pembayaran lewat WhatsApp. Bisa juga bayar tunai di kasir. Pesanan diproses setelah pembayaran dikonfirmasi.';
     return h('div', { class: 'wrap' },
       h('div', { class: 'top' }, h('button', { class: 'link', onClick: function () { go('menu'); } }, 'Kembali'), h('h1', null, 'Pesanan Anda')),
       h('div', { class: 'body' },
@@ -479,7 +482,7 @@
     var m = {
       menunggu_persetujuan: ['info', 'Pesanan antar Anda sedang diperiksa admin. Ongkir ditentukan setelah pesanan disetujui.'],
       menunggu_pembayaran: ['info', 'Pesanan disetujui. Total sudah termasuk ongkir ' + rp(o.delivery_fee) + '. Silakan bayar ke kasir; pesanan masuk dapur setelah pembayaran dikonfirmasi.'],
-      baru: ['info', 'Pesanan diterima dan masuk antrean dapur.'],
+      baru: ['info', o.payment_status === 'lunas' ? 'Pesanan diterima dan masuk antrean dapur.' : 'Pesanan diterima. Pesanan mulai diproses setelah pembayaran dikonfirmasi kasir.'],
       diproses: ['info', 'Pesanan sedang disiapkan.'],
       siap: ['good', o.order_type === 'bungkus' ? 'Pesanan siap diambil. Tunjukkan nomor antrean ke kasir.' : o.order_type === 'makan' ? 'Pesanan siap disajikan.' : 'Pesanan siap diantar.'],
       selesai: ['good', 'Pesanan selesai. Terima kasih sudah memesan di EA Dimsum!'],
@@ -517,6 +520,17 @@
         })));
       }
       if (S.orderErr) kids.push(h('p', { class: 'note' }, S.orderErr));
+      if (!stopped && o.payment_status !== 'lunas' && !(o.order_type === 'antar' && o.status === 'menunggu_persetujuan')) {
+        var waMsg = 'Halo EA Dimsum, saya konfirmasi pembayaran pesanan ' + o.queue_no + ' atas nama ' + o.customer_name + ', total ' + rp(o.total) + '. Link pesanan: ' + location.origin + location.pathname + '?o=' + S.token;
+        kids.push(h('div', { class: 'card payb noprint' },
+          h('b', null, 'Cara membayar'),
+          cfg.QRIS_IMG ? h('img', { class: 'qris', src: cfg.QRIS_IMG, alt: 'QRIS EA Dimsum' }) : null,
+          cfg.BANK_INFO ? h('div', { class: 'box' }, cfg.BANK_INFO) : null,
+          h('p', { class: 'note', style: 'margin:0' }, (cfg.QRIS_IMG || cfg.BANK_INFO)
+            ? 'Bayar sesuai total ' + rp(o.total) + ', lalu kirim bukti pembayaran lewat WhatsApp. Pesanan diproses setelah kasir mengonfirmasi.'
+            : 'Bayar tunai di kasir, atau chat kasir lewat WhatsApp untuk meminta info QRIS/transfer. Pesanan diproses setelah pembayaran dikonfirmasi kasir.'),
+          h('a', { class: 'btn-ghost', target: '_blank', rel: 'noopener', href: 'https://wa.me/' + WA + '?text=' + encodeURIComponent(waMsg) }, 'Konfirmasi pembayaran via WhatsApp')));
+      }
       kids.push(h('div', { class: 'card struk' },
         h('div', { class: 'judul' }, h('b', null, 'EA Dimsum'), h('div', { class: 'note' },
           new Date(o.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Makassar', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' · No. ' + o.queue_no)),
@@ -536,10 +550,8 @@
         h('button', { class: 'btn-ghost', onClick: copyLink }, 'Salin link struk'),
         h('button', { class: 'btn-ghost', onClick: function () { window.print(); } }, 'Cetak / simpan PDF')
       ];
-      if (cfg.WA_KASIR) {
-        acts.push(h('a', { class: 'btn-ghost', target: '_blank', rel: 'noopener',
-          href: 'https://wa.me/' + String(cfg.WA_KASIR).replace(/\D/g, '') + '?text=' + encodeURIComponent('Halo EA Dimsum, pesanan ' + o.queue_no + ' atas nama ' + o.customer_name) }, 'Hubungi kasir via WhatsApp'));
-      }
+      acts.push(h('a', { class: 'btn-ghost', target: '_blank', rel: 'noopener',
+        href: 'https://wa.me/' + WA + '?text=' + encodeURIComponent('Halo EA Dimsum, pesanan ' + o.queue_no + ' atas nama ' + o.customer_name) }, 'Hubungi kasir via WhatsApp'));
       kids.push(h('div', { class: 'acts noprint' }, acts));
     }
     return h('div', { class: 'wrap' },
