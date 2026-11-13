@@ -89,6 +89,15 @@
   .struk .judul b { font-size: 18px; font-weight: 800; }
   .dash { border-top: 1px dashed #DCCDBB; padding-top: 12px; }
   .acts { display: flex; flex-direction: column; gap: 8px; }
+  .incart { font-size: 12px; font-weight: 700; color: var(--hijau); margin-top: 2px; }
+  .cline { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  .cl-main { min-width: 0; }
+  .cl-ctl { display: flex; align-items: center; gap: 10px; flex: none; }
+  .qbtn.sm { width: 40px; height: 40px; font-size: 18px; }
+  .sheet-bg { position: fixed; inset: 0; background: rgba(43,27,16,.55); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
+  .sheet { background: #fff; width: 100%; max-width: 520px; border-radius: 22px 22px 0 0; padding: 20px 20px calc(16px + env(safe-area-inset-bottom)); max-height: 92vh; overflow-y: auto; }
+  .sheet h2 { margin: 0 0 4px; font-size: 20px; font-weight: 800; }
+  @media (min-width: 700px) { .sheet-bg { align-items: center; } .sheet { border-radius: 22px; } }
   .sidebox h2 { margin: 0 0 10px; font-size: 17px; font-weight: 800; }
   .sidebox .lines { margin-bottom: 12px; }
   @media (min-width: 700px) {
@@ -175,7 +184,7 @@
   var TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   var S = {
-    view: 'menu', menu: [], loading: true, loadErr: '', cat: null, qty: {},
+    view: 'menu', menu: [], toppings: [], sheet: null, loading: true, loadErr: '', cat: null, lines: [],
     type: 'bungkus', time: 'Sekarang', table: '', addr: '',
     name: getStore('ea_name') || '', phone: getStore('ea_phone') || '',
     busy: false, msg: '', token: null, order: null, orderErr: ''
@@ -188,10 +197,20 @@
     S.menu.forEach(function (m) { if (c.indexOf(m.category) < 0) c.push(m.category); });
     return c;
   }
-  function cartItems() { return S.menu.filter(function (m) { return (S.qty[m.id] || 0) > 0; }); }
-  function cartCount() { return cartItems().reduce(function (a, m) { return a + S.qty[m.id]; }, 0); }
-  function cartSub() { return cartItems().reduce(function (a, m) { return a + S.qty[m.id] * m.price; }, 0); }
-  function setQty(id, n) { S.qty[id] = Math.max(0, Math.min(50, n)); render(); }
+  function menuById(id) { return S.menu.filter(function (m) { return m.id === id; })[0]; }
+  function lineKey(id, tops) { return id + '|' + tops.join(','); }
+  function cartLines() { return S.lines.filter(function (l) { var m = menuById(l.id); return m && m.is_available; }); }
+  function cartCount() { return cartLines().reduce(function (a, l) { return a + l.qty; }, 0); }
+  function cartSub() { return cartLines().reduce(function (a, l) { return a + l.qty * menuById(l.id).price; }, 0); }
+  function itemQty(id) { return S.lines.reduce(function (a, l) { return a + (l.id === id ? l.qty : 0); }, 0); }
+  function addLine(id, tops, n) {
+    var k = lineKey(id, tops), l = S.lines.filter(function (x) { return x.key === k; })[0];
+    if (!l) { l = { key: k, id: id, tops: tops, qty: 0 }; S.lines.push(l); }
+    l.qty = Math.max(0, Math.min(50, l.qty + n));
+    if (l.qty === 0) S.lines = S.lines.filter(function (x) { return x !== l; });
+    render();
+  }
+  function topText(l) { return l.tops.length ? 'Topping: ' + l.tops.join(', ') : ''; }
   function go(v) { S.view = v; S.msg = ''; render(); window.scrollTo(0, 0); }
 
   // ---------- muat menu ----------
@@ -205,29 +224,37 @@
       S.menu = r.data || [];
       var cats = categories();
       if (!S.cat || cats.indexOf(S.cat) < 0) S.cat = cats[0] || null;
-      S.menu.forEach(function (m) { if (!m.is_available) delete S.qty[m.id]; });
+
     }
     if (!r.error) {
       var fr;
       try { fr = await db.from('public_menu_foto').select('*'); } catch (e) { fr = { error: e }; }
       if (fr && !fr.error && fr.data) {
         var map = {};
-        fr.data.forEach(function (x) { map[x.id] = x.image_url; });
-        S.menu.forEach(function (m) { if (!m.image_url && map[m.id]) m.image_url = map[m.id]; });
+        fr.data.forEach(function (x) { map[x.id] = x; });
+        S.menu.forEach(function (m) {
+          var x = map[m.id]; if (!x) return;
+          if (!m.image_url && x.image_url) m.image_url = x.image_url;
+          m.allow_topping = !!x.allow_topping;
+        });
       }
+      var tr;
+      try { tr = await db.from('public_toppings').select('*'); } catch (e) { tr = { error: e }; }
+      S.toppings = (tr && !tr.error && tr.data) ? tr.data.map(function (x) { return x.name; }) : [];
     }
     S.loading = false; render();
   }
 
   // ---------- kirim pesanan ----------
   function friendly(msg) {
-    return /^(Stok|Menu|Nama|Pesanan|Alamat|Nomor|Jumlah|Terlalu)/.test(msg || '')
+    return /^(Stok|Menu|Nama|Pesanan|Alamat|Nomor|Jumlah|Terlalu|Topping)/.test(msg || '')
       ? msg : 'Pesanan belum terkirim. Periksa sambungan internet lalu coba lagi.';
   }
   async function submit() {
     if (S.busy) return;
     var name = S.name.trim();
-    var items = cartItems().map(function (m) { return { menu_item_id: m.id, qty: S.qty[m.id] }; });
+    var lines = cartLines(), withTop = lines.some(function (l) { return l.tops.length; });
+    var items = lines.map(function (l) { return withTop ? { menu_item_id: l.id, qty: l.qty, toppings: l.tops } : { menu_item_id: l.id, qty: l.qty }; });
     if (!items.length) { S.msg = 'Keranjang masih kosong.'; return render(); }
     if (!name) { S.msg = 'Nama wajib diisi.'; return render(); }
     if (S.type === 'makan' && !S.table.trim()) { S.msg = 'Nomor meja wajib diisi.'; return render(); }
@@ -235,7 +262,7 @@
     S.busy = true; S.msg = ''; render();
     var r;
     try {
-      r = await db.rpc('create_order', {
+      r = await db.rpc(withTop ? 'create_order_topping' : 'create_order', {
         p_name: name,
         p_phone: S.phone.trim() || null,
         p_type: S.type,
@@ -255,7 +282,7 @@
     }
     setStore('ea_name', name); setStore('ea_phone', S.phone.trim());
     setStore('ea_last', r.data.token);
-    S.token = r.data.token; S.order = null; S.orderErr = ''; S.qty = {};
+    S.token = r.data.token; S.order = null; S.orderErr = ''; S.lines = [];
     try { history.replaceState(null, '', '?o=' + S.token); } catch (e) {}
     go('status');
     fetchOrder(); startPoll();
@@ -280,7 +307,7 @@
     go('status'); fetchOrder(); startPoll();
   }
   function reset() {
-    stopPoll(); S.token = null; S.order = null; S.orderErr = ''; S.qty = {};
+    stopPoll(); S.token = null; S.order = null; S.orderErr = ''; S.lines = [];
     try { history.replaceState(null, '', location.pathname); } catch (e) {}
     go('menu'); loadMenu();
   }
@@ -301,13 +328,14 @@
     return /bakso|tuna|bakar/.test(t) ? '🍢' : /minum|es |teh|kopi|jus/.test(t) ? '🥤' : '🥟';
   }
   function menuCard(m) {
-    var q = S.qty[m.id] || 0, ctrl;
+    var q = itemQty(m.id), ctrl, canTop = m.allow_topping && S.toppings.length > 0;
     if (!m.is_available) ctrl = h('span', { class: 'habis' }, 'Habis');
-    else if (q === 0) ctrl = h('button', { class: 'btn-add', onClick: function () { setQty(m.id, 1); } }, 'Tambah');
+    else if (canTop) ctrl = h('button', { class: 'btn-add', onClick: function () { S.sheet = { id: m.id, tops: [], qty: 1 }; render(); } }, 'Tambah');
+    else if (q === 0) ctrl = h('button', { class: 'btn-add', onClick: function () { addLine(m.id, [], 1); } }, 'Tambah');
     else ctrl = h('div', { class: 'qty' },
-      h('button', { class: 'qbtn', 'aria-label': 'Kurangi ' + m.name, onClick: function () { setQty(m.id, q - 1); } }, '−'),
+      h('button', { class: 'qbtn', 'aria-label': 'Kurangi ' + m.name, onClick: function () { addLine(m.id, [], -1); } }, '−'),
       h('span', { class: 'qnum' }, q),
-      h('button', { class: 'qbtn plus', 'aria-label': 'Tambah ' + m.name, onClick: function () { setQty(m.id, q + 1); } }, '+'));
+      h('button', { class: 'qbtn plus', 'aria-label': 'Tambah ' + m.name, onClick: function () { addLine(m.id, [], 1); } }, '+'));
     return h('div', { class: 'card item' + (m.is_available ? '' : ' off') },
       h('div', { class: 'foto', 'aria-hidden': 'true' },
         m.image_url ? h('img', { src: m.image_url, alt: '', loading: 'lazy' }) : icon(m),
@@ -315,13 +343,45 @@
       h('div', { class: 'info' },
         h('div', { class: 'nama' }, m.name),
         h('div', { class: 'ket' }, m.description || ''),
-        h('div', { class: 'harga' }, rp(m.price))),
+        canTop ? h('div', { class: 'ket' }, 'Bisa pakai topping') : null,
+        h('div', { class: 'harga' }, rp(m.price)),
+        (canTop && q > 0) ? h('div', { class: 'incart' }, q + ' di keranjang') : null),
       h('div', { class: 'ctl' }, ctrl));
   }
 
+  function sheetView() {
+    var sh = S.sheet, m = menuById(sh.id);
+    if (!m) return null;
+    function toggle(t) {
+      var i = sh.tops.indexOf(t);
+      if (i >= 0) sh.tops.splice(i, 1); else sh.tops.push(t);
+      sh.tops = S.toppings.filter(function (x) { return sh.tops.indexOf(x) >= 0; });
+      render();
+    }
+    return h('div', { class: 'sheet-bg', onClick: function (e) { if (e.target === e.currentTarget) { S.sheet = null; render(); } } },
+      h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Pilih topping ' + m.name },
+        h('h2', null, m.name),
+        h('p', { class: 'note', style: 'margin:0 0 10px' }, 'Topping gratis. Boleh pilih lebih dari satu, atau tidak pakai topping.'),
+        h('div', { class: 'seg' }, S.toppings.map(function (t) {
+          var on = sh.tops.indexOf(t) >= 0;
+          return h('button', { class: 'chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', onClick: function () { toggle(t); } }, t);
+        })),
+        h('div', { class: 'row', style: 'align-items:center;margin:16px 0 12px' },
+          h('span', { class: 'lbl', style: 'margin:0' }, 'Jumlah cup'),
+          h('div', { class: 'qty' },
+            h('button', { class: 'qbtn', 'aria-label': 'Kurangi jumlah', onClick: function () { sh.qty = Math.max(1, sh.qty - 1); render(); } }, '−'),
+            h('span', { class: 'qnum' }, sh.qty),
+            h('button', { class: 'qbtn plus', 'aria-label': 'Tambah jumlah', onClick: function () { sh.qty = Math.min(50, sh.qty + 1); render(); } }, '+'))),
+        h('button', { class: 'btn', onClick: function () { var t = sh.tops.slice(); var n = sh.qty; S.sheet = null; addLine(m.id, t, n); } },
+          h('span', null, 'Tambah ke keranjang'), h('span', null, rp(sh.qty * m.price))),
+        h('button', { class: 'link', style: 'width:100%;margin-top:6px', onClick: function () { S.sheet = null; render(); } }, 'Batal')));
+  }
+
   function sideBox(n) {
-    var lines = cartItems().map(function (m) {
-      return h('div', { class: 'row' }, h('span', null, S.qty[m.id] + ' x ' + m.name), h('span', { class: 'nama' }, rp(S.qty[m.id] * m.price)));
+    var lines = cartLines().map(function (l) {
+      var m = menuById(l.id);
+      return h('div', null, h('div', { class: 'row' }, h('span', null, l.qty + ' x ' + m.name), h('span', { class: 'nama' }, rp(l.qty * m.price))),
+        l.tops.length ? h('div', { class: 'ket' }, topText(l)) : null);
     });
     return h('aside', { class: 'side' }, h('div', { class: 'card sidebox' },
       h('h2', null, 'Pesanan Anda'),
@@ -355,13 +415,21 @@
       h('div', { class: 'bar' }, n > 0
         ? h('button', { class: 'btn', onClick: function () { go('cart'); } },
             h('span', null, 'Lihat keranjang · ' + n + ' item'), h('span', null, rp(cartSub())))
-        : h('div', { class: 'redup center' }, 'Pilih menu untuk memulai pesanan')));
+        : h('div', { class: 'redup center' }, 'Pilih menu untuk memulai pesanan')),
+      S.sheet ? sheetView() : null);
   }
 
   // ---------- tampilan: keranjang ----------
   function viewCart() {
-    var lines = cartItems().map(function (m) {
-      return h('div', { class: 'row' }, h('span', null, S.qty[m.id] + ' x ' + m.name), h('span', { class: 'nama' }, rp(S.qty[m.id] * m.price)));
+    var lines = cartLines().map(function (l) {
+      var m = menuById(l.id);
+      return h('div', { class: 'cline' },
+        h('div', { class: 'cl-main' }, h('div', null, l.qty + ' x ' + m.name), l.tops.length ? h('div', { class: 'ket' }, topText(l)) : null),
+        h('div', { class: 'cl-ctl' },
+          h('span', { class: 'nama' }, rp(l.qty * m.price)),
+          h('div', { class: 'qty' },
+            h('button', { class: 'qbtn sm', 'aria-label': 'Kurangi ' + m.name + (l.tops.length ? ' ' + topText(l) : ''), onClick: function () { addLine(l.id, l.tops, -1); } }, '−'),
+            h('button', { class: 'qbtn sm plus', 'aria-label': 'Tambah ' + m.name + (l.tops.length ? ' ' + topText(l) : ''), onClick: function () { addLine(l.id, l.tops, 1); } }, '+'))));
     });
     var extra;
     if (S.type === 'bungkus') {
@@ -454,7 +522,8 @@
           new Date(o.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Makassar', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' · No. ' + o.queue_no)),
         h('div', { class: 'dash' }, h('div', { class: 'nama' }, o.customer_name), h('div', { class: 'note' }, detailText(o))),
         h('div', { class: 'dash lines' }, (o.items || []).map(function (it) {
-          return h('div', { class: 'row' }, h('span', null, it.qty + ' x ' + it.name), h('span', null, rp(it.line_total)));
+          return h('div', null, h('div', { class: 'row' }, h('span', null, it.qty + ' x ' + it.name), h('span', null, rp(it.line_total))),
+            it.note ? h('div', { class: 'ket' }, it.note) : null);
         })),
         h('div', { class: 'dash lines' },
           h('div', { class: 'row' }, h('span', { class: 'redup' }, 'Subtotal'), h('span', null, rp(o.subtotal))),
