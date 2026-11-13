@@ -293,7 +293,7 @@
     var r;
     try {
       r = await db.from('orders')
-        .select('id,queue_no,customer_name,customer_phone,order_type,status,pickup_note,table_no,delivery_address,delivery_fee,reject_reason,subtotal,discount,discount_note,total,payment_status,payment_method,created_at,order_items(item_name,qty,line_total,note)')
+        .select('id,queue_no,customer_name,customer_phone,order_type,status,pickup_note,table_no,delivery_address,delivery_fee,reject_reason,subtotal,discount,discount_note,total,payment_status,payment_method,pay_later,created_at,order_items(item_name,qty,line_total,note)')
         .or('order_day.eq.' + todayStr() + ',status.in.(' + ACTIVE.join(',') + ')')
         .order('created_at', { ascending: false });
     } catch (e) { r = { error: e }; }
@@ -763,6 +763,7 @@
     var acts = [];
     if (o.status === 'menunggu_persetujuan') {
       acts.push(h('div', { class: 'box' },
+        o.pay_later ? h('div', { class: 'small', style: 'margin-bottom:8px;font-weight:700' }, 'Pelanggan memilih bayar tunai (COD). Setelah disetujui, pesanan langsung masuk dapur.') : null,
         h('label', { class: 'lbl', for: 'fee-' + o.id }, 'Ongkir (Rp)'),
         h('input', { type: 'number', min: '0', step: '500', inputmode: 'numeric', id: 'fee-' + o.id, placeholder: 'Contoh: 8000', value: K.fee[o.id] || '', onInput: function (e) { K.fee[o.id] = e.target.value; } }),
         h('div', { class: 'btns', style: 'margin-top:8px' },
@@ -774,16 +775,18 @@
         o.status === 'menunggu_pembayaran' ? 'Tandai lunas (masuk dapur)' : 'Tandai lunas'));
       var nx = NEXT[o.status];
       if (nx) {
-        var blocked = (nx[0] === 'diproses' || nx[0] === 'selesai') && !paid;
+        var blocked = ((nx[0] === 'diproses' && !o.pay_later) || nx[0] === 'selesai') && !paid;
         row.push(h('button', { class: 'b-main', disabled: K.busy || blocked, title: blocked ? 'Tandai lunas dulu' : null, onClick: function () { setStatus(o, nx[0]); } }, nx[1]));
       }
       row.push(h('button', { class: 'b-del', disabled: K.busy, onClick: function () { cancelOrder(o); } }, 'Batalkan'));
       acts.push(h('div', { class: 'btns' }, row));
-      if (o.status === 'siap' && !paid) acts.push(h('div', { class: 'small redup' }, 'Tandai lunas dulu sebelum menyelesaikan pesanan.'));
+      if (o.status === 'siap' && !paid) acts.push(h('div', { class: 'small redup' }, (o.pay_later ? 'Terima pembayaran tunai, lalu tekan Tandai lunas sebelum menyelesaikan pesanan.' : 'Tandai lunas dulu sebelum menyelesaikan pesanan.')));
     }
     if (!fin && !paid) acts.push(discountBlock(o));
     return h('div', { class: 'card' },
-      h('div', { class: 'row' }, h('span', { class: 'no' }, o.queue_no), h('span', { class: 'badge ' + (BADGE[o.status] || 'b-end') }, LABEL[o.status] || o.status)),
+      h('div', { class: 'row' }, h('span', { class: 'no' }, o.queue_no), h('span', { class: 'btns', style: 'flex-wrap:nowrap;gap:6px' },
+        (o.pay_later && !paid) ? h('span', { class: 'badge b-wait' }, o.order_type === 'antar' ? 'COD' : 'Bayar nanti') : null,
+        h('span', { class: 'badge ' + (BADGE[o.status] || 'b-end') }, LABEL[o.status] || o.status))),
       h('div', null, h('b', null, o.customer_name), h('span', { class: 'redup' }, ' · ' + TYPE[o.order_type] + ' · ' + jam(o.created_at))),
       o.customer_phone ? h('div', { class: 'small redup' }, 'WA: ' + o.customer_phone) : null,
       h('div', { class: 'box small' }, detail),
