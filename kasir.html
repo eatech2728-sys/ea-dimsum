@@ -182,6 +182,7 @@
     orders: [], stock: [], menu: [], cats: [], tops: [], topsErr: false, newTop: '', rep: null,
     fee: {}, disc: {}, stockIn: {}, menuEdit: {}, newMenu: { cat: '', newCat: '', name: '', price: '', desc: '' },
     pos: { loaded: false, menu: [], tops: [], lines: [], sheet: null, cat: null, type: 'bungkus', pay: 'Tunai', name: '', table: '', done: true, disc: '', note: '', last: null },
+    staff: [], staffErr: false, uid: null, newStaff: { email: '', name: '', role: 'kasir' },
     email: '', pass: '', loginErr: '', busy: false, err: '', info: '', dirty: false
   };
   var chan = null, pollT = null, reloadT = null, ac = null;
@@ -255,7 +256,7 @@
       try { await db.auth.signOut(); } catch (e) {}
       return render();
     }
-    K.profile = p.data; K.ready = true; K.loginErr = '';
+    K.profile = p.data; K.uid = user.id; K.ready = true; K.loginErr = '';
     await loadOrders(true);
     render();
     startLive();
@@ -325,6 +326,12 @@
     await loadTops();
     safeRender();
   }
+  async function loadStaff() {
+    var r;
+    try { r = await db.rpc('list_staff'); } catch (e) { r = { error: e }; }
+    if (r.error) K.staffErr = true; else { K.staff = r.data || []; K.staffErr = false; }
+    safeRender();
+  }
   async function loadReport() {
     var t = todayStr(), rs;
     try {
@@ -357,6 +364,7 @@
     if (t === 'stok') loadStock();
     if (t === 'jual') posLoad();
     if (t === 'menu') loadMenu();
+    if (t === 'pengaturan') loadStaff();
     if (t === 'laporan') loadReport();
   }
 
@@ -640,6 +648,17 @@
     if (!confirm('Hapus topping ' + t.name + '? Pesanan lama tidak terpengaruh.')) return;
     run(function () { return db.from('toppings').delete().eq('id', t.id); },
       async function () { if (!K.err) K.info = 'Topping ' + t.name + ' dihapus.'; await loadMenu(); });
+  }
+  function addStaff() {
+    var f = K.newStaff;
+    if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) { K.err = 'Isi email akun pegawai dengan benar.'; return render(); }
+    if (!f.name.trim()) { K.err = 'Nama pegawai wajib diisi.'; return render(); }
+    run(function () { return db.rpc('add_staff', { p_email: f.email.trim(), p_name: f.name.trim(), p_role: f.role }); },
+      async function () { if (!K.err) { K.info = 'Pegawai ' + f.name.trim() + ' ditambahkan sebagai ' + f.role + '.'; K.newStaff = { email: '', name: '', role: 'kasir' }; } await loadStaff(); });
+  }
+  function changeStaff(s, role, active) {
+    run(function () { return db.rpc('set_staff', { p_id: s.id, p_role: role, p_active: active }); },
+      async function () { if (!K.err) K.info = 'Data ' + s.full_name + ' diperbarui.'; await loadStaff(); });
   }
   function toggleCatTopping(c) {
     var to = !c.has_topping;
@@ -953,8 +972,43 @@
   }
 
   // ---------- tampilan: pengaturan (admin) ----------
+  var ROLES = [['admin', 'Admin'], ['kasir', 'Kasir'], ['dapur', 'Dapur']];
+  function viewStaff() {
+    var f = K.newStaff;
+    return h('div', null,
+      h('h2', { style: 'margin-top:4px' }, 'Pegawai'),
+      K.staffErr ? h('p', { class: 'redup' }, 'Daftar pegawai belum aktif. Jalankan file ea-dimsum-pegawai.sql di Supabase terlebih dahulu.')
+      : h('div', { class: 'card lines' },
+          K.staff.length ? K.staff.map(function (s) {
+            var me = s.id === K.uid;
+            return h('div', { class: 'row', style: 'flex-wrap:wrap;opacity:' + (s.is_active ? 1 : .55) },
+              h('span', null, h('b', null, s.full_name), me ? h('span', { class: 'redup' }, ' (Anda)') : null,
+                h('div', { class: 'small redup' }, (s.email || '-') + (s.is_active ? '' : ' · nonaktif'))),
+              h('span', { class: 'btns', style: 'align-items:center' },
+                h('select', { style: 'width:auto', 'aria-label': 'Peran ' + s.full_name, disabled: K.busy || me, onChange: function (e) { changeStaff(s, e.target.value, s.is_active); } },
+                  ROLES.map(function (r) { return h('option', { value: r[0], selected: s.role === r[0] }, r[1]); })),
+                h('button', { class: s.is_active ? 'b-del' : 'b-out', disabled: K.busy || me, 'aria-label': (s.is_active ? 'Nonaktifkan ' : 'Aktifkan ') + s.full_name,
+                  onClick: function () { changeStaff(s, s.role, !s.is_active); } }, s.is_active ? 'Nonaktifkan' : 'Aktifkan')));
+          }) : h('p', { class: 'redup' }, 'Belum ada pegawai.'),
+          h('div', { class: 'dash' },
+            h('b', null, 'Tambah pegawai'),
+            h('ol', { class: 'small redup', style: 'margin:6px 0 10px;padding-left:18px' },
+              h('li', null, 'Buat akun login dulu di Supabase: Authentication, Users, Add user. Isi email dan kata sandi, lalu centang Auto Confirm User.'),
+              h('li', null, 'Kembali ke sini, isi email yang sama, nama, dan peran, lalu tekan Tambah pegawai.')),
+            h('div', { class: 'two' },
+              h('div', null, h('label', { class: 'lbl', for: 'ns-email' }, 'Email akun'),
+                h('input', { type: 'email', id: 'ns-email', autocomplete: 'off', value: f.email, onInput: function (e) { f.email = e.target.value; } })),
+              h('div', null, h('label', { class: 'lbl', for: 'ns-name' }, 'Nama pegawai'),
+                h('input', { type: 'text', id: 'ns-name', maxlength: '60', value: f.name, onInput: function (e) { f.name = e.target.value; } }))),
+            h('div', null, h('label', { class: 'lbl', for: 'ns-role' }, 'Peran'),
+              h('select', { id: 'ns-role', onChange: function (e) { f.role = e.target.value; } },
+                ROLES.map(function (r) { return h('option', { value: r[0], selected: f.role === r[0] }, r[1]); }))),
+            h('div', { class: 'btns', style: 'margin-top:10px' }, h('button', { class: 'b-main', disabled: K.busy, onClick: addStaff }, 'Tambah pegawai')),
+            h('div', { class: 'small redup', style: 'margin-top:8px' }, 'Admin: semua fitur. Kasir dan Dapur: pesanan, jual langsung, stok, laporan, dan diskon, tanpa menu, pengaturan, dan hapus data. Lupa kata sandi: ubah di Supabase, Authentication, Users.'))));
+  }
   function viewSettings() {
     return h('div', null,
+      viewStaff(),
       h('h2', { style: 'margin-top:4px' }, 'Hapus data uji coba'),
       h('div', { class: 'card' },
         h('p', { style: 'margin:0' }, 'Gunakan ini sekali saja, setelah selesai mencoba aplikasi dan sebelum EA Dimsum berjualan sungguhan.'),
