@@ -4,4 +4,5 @@
 window.EA_CONFIG = {
   SUPABASE_URL: 'https://edmdrkrsjqtiwjrbzxjm.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_H1jUGsj9XAdKjx80VvfmvA_icCy2t9t'
+  WALLPAPER: 'wallpaper.jpg',
 };
