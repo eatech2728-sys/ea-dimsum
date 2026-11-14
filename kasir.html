@@ -88,6 +88,8 @@
   .sheet { background: #fff; width: 100%; max-width: 480px; border-radius: 20px; padding: 20px; max-height: 92vh; overflow-y: auto; }
   .chip.off { opacity: .55; text-decoration: line-through; cursor: not-allowed; }
   @media (min-width: 900px) { .pos { grid-template-columns: minmax(0, 1fr) 400px; } .pcart { position: sticky; top: 84px; } }
+  .wp { position: fixed; inset: -24px; z-index: -1; pointer-events: none; background-size: cover; background-position: center; transform: scale(1.04); }
+  @media print { .wp { display: none !important; } }
   .tgls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .tgl { min-height: 48px; padding: 0 14px; border-radius: 14px; border: 1.5px solid; display: inline-flex; align-items: center; gap: 10px; font-weight: 600; background: #fff; }
   .tgl b { font-size: 12px; padding: 2px 8px; border-radius: 10px; }
@@ -128,6 +130,20 @@
   'use strict';
   var cfg = window.EA_CONFIG || {};
   var root = document.getElementById('app');
+  var WP_BLUR = 8, WP_OP = 0.16;
+
+
+  // ---------- wallpaper (latar buram di belakang isi) ----------
+  function cssUrl(u) { return encodeURI(String(u)).replace(/['()"\\]/g, function (c) { return '%' + c.charCodeAt(0).toString(16); }); }
+  function wpNum(v, d) { var n = Number(v); return (v === undefined || v === null || v === '' || isNaN(n)) ? d : n; }
+  function applyWallpaper() {
+    var old = document.getElementById('wp'); if (old && old.parentNode) old.parentNode.removeChild(old);
+    var blur = wpNum(cfg.WALLPAPER_BLUR, WP_BLUR), op = wpNum(cfg.WALLPAPER_OPACITY_KASIR, WP_OP), el = null;
+    if (cfg.WALLPAPER) {
+      el = h('div', { id: 'wp', class: 'wp', 'aria-hidden': 'true', style: "background-image:url('" + cssUrl(cfg.WALLPAPER) + "');filter:blur(" + blur + 'px);opacity:' + op });
+    }
+    if (el) document.body.insertBefore(el, document.body.firstChild);
+  }
 
   // ---------- pembantu ----------
   function h(tag, attrs) {
@@ -1034,6 +1050,7 @@
     });
   }
   render();
+  applyWallpaper();
   init();
 })();
 </script>
