@@ -102,6 +102,10 @@
   @media (min-width: 700px) { .sheet-bg { align-items: center; } .sheet { border-radius: 22px; } }
   .payb { display: flex; flex-direction: column; gap: 10px; }
   .payb .qris { width: 100%; max-width: 280px; align-self: center; border-radius: 12px; border: 1px solid var(--garis); }
+  .wp { position: fixed; inset: -24px; z-index: -1; pointer-events: none; background-size: cover; background-position: center; transform: scale(1.04); }
+  .wp.mosaic { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); grid-auto-rows: 230px; overflow: hidden; background: none; }
+  .wp.mosaic i { display: block; background-size: cover; background-position: center; }
+  @media print { .wp { display: none !important; } }
   .sidebox h2 { margin: 0 0 10px; font-size: 17px; font-weight: 800; }
   .sidebox .lines { margin-bottom: 12px; }
   @media (min-width: 700px) {
@@ -181,8 +185,26 @@
   var db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY,
     { auth: { persistSession: false, autoRefreshToken: false } });
 
+
+  // ---------- wallpaper (latar buram di belakang isi) ----------
+  function cssUrl(u) { return encodeURI(String(u)).replace(/['()"\\]/g, function (c) { return '%' + c.charCodeAt(0).toString(16); }); }
+  function wpNum(v, d) { var n = Number(v); return (v === undefined || v === null || v === '' || isNaN(n)) ? d : n; }
+  function applyWallpaper(tiles) {
+    var old = document.getElementById('wp'); if (old && old.parentNode) old.parentNode.removeChild(old);
+    var blur = wpNum(cfg.WALLPAPER_BLUR, WP_BLUR), op = wpNum(cfg.WALLPAPER_OPACITY, WP_OP), el = null;
+    if (cfg.WALLPAPER) {
+      el = h('div', { id: 'wp', class: 'wp', 'aria-hidden': 'true', style: "background-image:url('" + cssUrl(cfg.WALLPAPER) + "');filter:blur(" + blur + 'px);opacity:' + op });
+    } else if (tiles && tiles.length) {
+      var kids = [], n = 24;
+      for (var i = 0; i < n; i++) kids.push(h('i', { style: "background-image:url('" + cssUrl(tiles[i % tiles.length]) + "')" }));
+      el = h('div', { id: 'wp', class: 'wp mosaic', 'aria-hidden': 'true', style: 'filter:blur(' + Math.max(blur, 10) + 'px);opacity:' + op }, kids);
+    }
+    if (el) document.body.insertBefore(el, document.body.firstChild);
+  }
+
   // ---------- data tetap ----------
   var BANK = cfg.BANK_INFO || 'Bank Pembangunan Daerah Sultra 22802010020061 a.n. WA ODE ERNI';
+  var WP_BLUR = 6, WP_OP = 0.28;
   var WA = String(cfg.WA_KASIR || '082282288380').replace(/\D/g, '').replace(/^0/, '62');
   var TYPES = [['bungkus', 'Bungkus'], ['makan', 'Makan di tempat'], ['antar', 'Antar']];
   var TIMES = ['Sekarang', '15 menit lagi', '30 menit lagi'];
@@ -249,6 +271,7 @@
       S.toppings = (tr && !tr.error && tr.data) ? tr.data.map(function (x) { return { name: x.name, ok: x.is_available !== false }; }) : [];
     }
     S.loading = false; render();
+    applyWallpaper(S.menu.map(function (m) { return m.image_url; }).filter(Boolean));
   }
 
   // ---------- kirim pesanan ----------
@@ -613,6 +636,7 @@
   }
 
   // ---------- mulai ----------
+  applyWallpaper();
   var param = null;
   try { param = new URLSearchParams(location.search).get('o'); } catch (e) {}
   if (param) { S.token = param; S.view = 'status'; render(); fetchOrder(); startPoll(); }
